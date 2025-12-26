@@ -4,8 +4,10 @@ import 'dart:convert';
 import 'package:jan_aushadi/widgets/secure_image_widget.dart';
 import 'package:jan_aushadi/models/Product_model.dart' as product_model;
 import 'package:jan_aushadi/screens/product_details_screen.dart';
-import 'package:jan_aushadi/screens/cart_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jan_aushadi/services/cart_service.dart';
+
+typedef Product = product_model.Product;
 
 List<String> _getCategoryImageUrls(String? imageFilename) {
   if (imageFilename == null || imageFilename.isEmpty) {
@@ -32,9 +34,7 @@ List<String> _getCategoryImageUrls(String? imageFilename) {
 }
 
 class CategoriesScreen extends StatefulWidget {
-  final Map<int, int>? cartItems;
-
-  const CategoriesScreen({super.key, this.cartItems});
+  const CategoriesScreen({super.key});
 
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
@@ -44,12 +44,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   late Future<List<MasterCategory>> _categoriesFuture;
   bool _initialized = false;
   int _selectedCategoryIndex = 0;
-  late Map<int, int> _cartItems;
 
   @override
   void initState() {
     super.initState();
-    _cartItems = widget.cartItems ?? {};
     _initializeCategories();
   }
 
@@ -57,42 +55,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     setState(() {
       _categoriesFuture = _fetchCategories();
       _initialized = true;
-    });
-  }
-
-  Future<void> _openCart() async {
-    // Load latest cart from SharedPreferences
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cartJson = prefs.getString('cart_items');
-      if (cartJson != null && cartJson.isNotEmpty) {
-        final Map<String, dynamic> decoded = jsonDecode(cartJson);
-        _cartItems = decoded.map(
-          (key, value) => MapEntry(int.parse(key), value as int),
-        );
-      }
-    } catch (e) {
-      print('Error loading cart: $e');
-    }
-
-    if (!mounted) return;
-
-    // Navigate to cart screen - we need to pass products, but we don't have them here
-    // So we'll pass an empty list and let the cart screen handle it
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CartScreen(
-          cartItems: _cartItems,
-          products: [], // Empty list - cart screen should handle this
-        ),
-      ),
-    ).then((result) {
-      if (result is Map<int, int>) {
-        setState(() {
-          _cartItems = result;
-        });
-      }
     });
   }
 
@@ -147,44 +109,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          // Cart Button
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart, color: Colors.white),
-                onPressed: () {
-                  _openCart();
-                },
-              ),
-              if (_cartItems.isNotEmpty)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    child: Text(
-                      '${_cartItems.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
+        actions: [],
       ),
       body: !_initialized
           ? const Center(
@@ -350,7 +275,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       child: CategoryProductsContent(
                         category: categories[_selectedCategoryIndex],
                         categoryId: categories[_selectedCategoryIndex].id,
-                        cartItems: _cartItems,
                       ),
                     ),
                   ],
@@ -585,13 +509,11 @@ class _SubCategoriesScreenState extends State<SubCategoriesScreen> {
 class CategoryProductsContent extends StatefulWidget {
   final MasterCategory category;
   final String categoryId;
-  final Map<int, int> cartItems;
 
   const CategoryProductsContent({
     super.key,
     required this.category,
     required this.categoryId,
-    required this.cartItems,
   });
 
   @override
@@ -606,7 +528,7 @@ class _CategoryProductsContentState extends State<CategoryProductsContent> {
   @override
   void initState() {
     super.initState();
-    _cartItems = widget.cartItems;
+    _cartItems = {};
     _productsFuture = _fetchCategoryProducts();
   }
 
@@ -783,64 +705,72 @@ class _CategoryProductsContentState extends State<CategoryProductsContent> {
       );
       await prefs.setString('cart_items', cartJson);
       print('✅ Cart saved to SharedPreferences from Categories: $_cartItems');
+
+      // Also update CartService to notify listeners
+      for (final entry in _cartItems.entries) {
+        await CartService.addItem(entry.key.toString(), entry.value);
+      }
     } catch (e) {
       print('❌ Error saving cart to SharedPreferences: $e');
     }
   }
 
   Widget _buildProductCard(CategoryProduct product) {
-    return GestureDetector(
-      onTap: () {
-        // Convert CategoryProduct to Product and navigate to existing product details screen
-        final productModel = product_model.Product(
-          id: product.id,
-          name: product.name,
-          brand: product.brandName,
-          originalPrice: double.tryParse(product.mrpPrice) ?? 0,
-          salePrice: double.tryParse(product.salePrice) ?? 0,
-          rating: 0,
-          discountPercent: int.tryParse(product.discountPercent) ?? 0,
-          imageUrl: product.imageUrl,
-          description: product.genericName,
-          composition: product.composition,
-          hsn_code: product.hsnCode,
-          unit: '',
-          description1: product.description1,
-          description2: product.description2,
-          description3: product.description3,
-          description4: product.description4,
-          description5: product.description5,
-          description6: product.description6,
-          description7: product.description7,
-        );
+    final productId = int.parse(product.id);
+    final isInCart = _cartItems.containsKey(productId);
+    final quantity = _cartItems[productId] ?? 0;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductDetailsScreen(
-              product: productModel,
-              cartItems: _cartItems,
-            ),
-          ),
-        ).then((result) {
-          if (result is Map<int, int>) {
-            setState(() {
-              _cartItems = result;
-            });
-          }
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: Row(
-          children: [
-            Container(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              final productModel = product_model.Product(
+                id: product.id,
+                name: product.name,
+                brand: product.brandName,
+                originalPrice: double.tryParse(product.mrpPrice) ?? 0,
+                salePrice: double.tryParse(product.salePrice) ?? 0,
+                rating: 0,
+                discountPercent: int.tryParse(product.discountPercent) ?? 0,
+                imageUrl: product.imageUrl,
+                description: product.genericName,
+                composition: product.composition,
+                hsn_code: product.hsnCode,
+                unit: '',
+                description1: product.description1,
+                description2: product.description2,
+                description3: product.description3,
+                description4: product.description4,
+                description5: product.description5,
+                description6: product.description6,
+                description7: product.description7,
+              );
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProductDetailsScreen(
+                    product: productModel,
+                    cartItems: _cartItems,
+                  ),
+                ),
+              ).then((result) {
+                if (result is Map<int, int>) {
+                  setState(() {
+                    _cartItems = result;
+                  });
+                }
+              });
+            },
+            child: Container(
               width: 70,
               height: 70,
               decoration: BoxDecoration(
@@ -865,83 +795,216 @@ class _CategoryProductsContentState extends State<CategoryProductsContent> {
                       size: 30,
                     ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    product.genericName,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        '₹${product.salePrice}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    final productModel = product_model.Product(
+                      id: product.id,
+                      name: product.name,
+                      brand: product.brandName,
+                      originalPrice: double.tryParse(product.mrpPrice) ?? 0,
+                      salePrice: double.tryParse(product.salePrice) ?? 0,
+                      rating: 0,
+                      discountPercent:
+                          int.tryParse(product.discountPercent) ?? 0,
+                      imageUrl: product.imageUrl,
+                      description: product.genericName,
+                      composition: product.composition,
+                      hsn_code: product.hsnCode,
+                      unit: '',
+                      description1: product.description1,
+                      description2: product.description2,
+                      description3: product.description3,
+                      description4: product.description4,
+                      description5: product.description5,
+                      description6: product.description6,
+                      description7: product.description7,
+                    );
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductDetailsScreen(
+                          product: productModel,
+                          cartItems: _cartItems,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      if (product.mrpPrice != product.salePrice)
-                        Text(
-                          '₹${product.mrpPrice}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[500],
-                            decoration: TextDecoration.lineThrough,
-                          ),
+                    ).then((result) {
+                      if (result is Map<int, int>) {
+                        setState(() {
+                          _cartItems = result;
+                        });
+                      }
+                    });
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        product.genericName,
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            '₹${product.salePrice}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (product.mrpPrice != product.salePrice)
+                            Flexible(
+                              child: Text(
+                                '₹${product.mrpPrice}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[500],
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            // Quick Add Button
-            GestureDetector(
-              onTap: () async {
-                final productId = int.parse(product.id);
-                _cartItems[productId] = (_cartItems[productId] ?? 0) + 1;
-
-                // Save cart to SharedPreferences
-                await _saveCartToSharedPreferences();
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${product.name} added to cart'),
-                      backgroundColor: Colors.green,
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1976D2),
-                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Icon(Icons.add, color: Colors.white, size: 20),
-              ),
+                const SizedBox(height: 8),
+                // ADD Button or Quantity Selector
+                if (!isInCart)
+                  GestureDetector(
+                    onTap: () async {
+                      _cartItems[productId] = 1;
+                      await _saveCartToSharedPreferences();
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${product.name} added to cart'),
+                            backgroundColor: Colors.green,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      setState(() {});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1976D2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'ADD',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFF1976D2),
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () async {
+                            if (quantity > 1) {
+                              _cartItems[productId] = quantity - 1;
+                            } else {
+                              _cartItems.remove(productId);
+                            }
+                            await _saveCartToSharedPreferences();
+                            setState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            child: const Icon(
+                              Icons.remove,
+                              size: 14,
+                              color: Color(0xFF1976D2),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            '$quantity',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1976D2),
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () async {
+                            _cartItems[productId] = quantity + 1;
+                            await _saveCartToSharedPreferences();
+                            setState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              size: 14,
+                              color: Color(0xFF1976D2),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

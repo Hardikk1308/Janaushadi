@@ -284,16 +284,23 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       for (final entry in widget.cartItems!.entries) {
         final productId = entry.key;
         final quantity = entry.value;
-        final product = widget.products!.firstWhere(
-          (p) => p.id == productId,
-          orElse: () => widget.products!.first,
-        );
+
+        // Find product or use first available
+        Product? product;
+        try {
+          product = widget.products!.firstWhere((p) => p.id == productId);
+        } catch (e) {
+          // If product not found, skip this item
+          print('⚠️ Product not found for ID: $productId');
+          continue;
+        }
+
         productsList.add({
-          'F5_ITEM': product.name,
+          'F5_ITEM': product?.name,
           'F5_QTY': quantity.toString(),
-          'F5_RATE': product.salePrice.toString(),
-          'F5_MRP': product.originalPrice.toString(),
-          'F5_ITEM_CODE': product.id.toString(),
+          'F5_RATE': product?.salePrice.toString(),
+          'F5_MRP': product?.originalPrice.toString(),
+          'F5_ITEM_CODE': product?.id.toString(),
         });
       }
 
@@ -587,7 +594,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
       }
 
       String? addressId;
-      String? fullAddress;
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -596,9 +602,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
           final decodedData = jsonDecode(addressJson);
           if (decodedData is Map) {
             addressId = decodedData['M1_ADD_ID']?.toString();
-            fullAddress =
-                decodedData['fullAddress']?.toString() ??
-                decodedData['M1_ADD1']?.toString();
           }
         }
       } catch (e) {
@@ -635,7 +638,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                 var firstAddress = dataArray[0];
                 if (firstAddress is Map) {
                   addressId = firstAddress['M1_ADD_ID']?.toString();
-                  fullAddress = firstAddress['M1_ADD1']?.toString();
                 }
               }
             }
@@ -1053,86 +1055,58 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
     required bool isSelected,
     required ValueChanged<String> onChanged,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isSelected ? AppConstants.primaryColor : Colors.grey[200]!,
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
-          cardTheme: CardThemeData(
-            elevation: 0,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
+    return GestureDetector(
+      onTap: () => onChanged(value),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppConstants.primaryColor : Colors.grey[200]!,
+            width: isSelected ? 2 : 1,
           ),
         ),
-        child: ExpansionTile(
-          initiallyExpanded: isSelected,
-          onExpansionChanged: (expanded) {
-            if (expanded) {
-              onChanged(value);
-            }
-          },
-          title: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected
-                        ? AppConstants.primaryColor
-                        : Colors.grey[300]!,
-                    width: isSelected ? 6 : 2,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Icon(
-                icon,
-                color: isSelected
-                    ? AppConstants.primaryColor
-                    : Colors.grey[600],
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        padding: const EdgeInsets.all(14),
+        child: Row(
           children: [
-            Divider(height: 0.5, color: Colors.grey[200]),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(56, 12, 16, 12),
-              child: Text(
-                'Select this payment method to continue',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected
+                      ? AppConstants.primaryColor
+                      : Colors.grey[300]!,
+                  width: isSelected ? 6 : 2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(
+              icon,
+              color: isSelected ? AppConstants.primaryColor : Colors.grey[600],
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                  ),
+                ],
               ),
             ),
           ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
-import 'package:jan_aushadi/screens/Homescreen.dart';
+import 'package:jan_aushadi/screens/OrdersPage.dart';
 import 'package:jan_aushadi/screens/splash/splash_screen.dart';
 import 'package:jan_aushadi/screens/auth/phone_login_screen.dart';
 import 'package:jan_aushadi/screens/MainApp.dart';
@@ -145,6 +145,7 @@ class MyApp extends StatelessWidget {
         '/': (context) => const MainApp(),
         '/login': (context) => const PhoneLoginScreen(),
         '/home': (context) => const MainApp(),
+        '/order': (context) => const OrdersPage(),
         '/all_products': (context) => const AllProductsScreen(),
         '/search': (context) => const SearchScreen(),
       },

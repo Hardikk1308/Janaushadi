@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/services/order_service.dart';
 import 'package:jan_aushadi/services/auth_service.dart';
-import 'package:jan_aushadi/screens/order_tracking_screen.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +15,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  late List<Map<String, dynamic>> _orders = [];
   Map<String, dynamic> _userData = {};
   String? _m1Code;
   bool _isLoadingProfile = true;
@@ -48,9 +46,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final orders = await OrderService().getAllOrders();
       setState(() {
         if (orders is List) {
-          _orders = (orders as List).cast<Map<String, dynamic>>();
         } else {
-          _orders = [orders];
         }
       });
     } catch (e) {
@@ -634,18 +630,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  DateTime? _parseDate(String dateString) {
-    if (dateString.isEmpty) return null;
-    try {
-      return DateTime.parse(dateString);
-    } catch (e) {
-      return null;
-    }
-  }
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
 
   DateTime? _parseDisplayDate(String dateString) {
     if (dateString.isEmpty) return null;

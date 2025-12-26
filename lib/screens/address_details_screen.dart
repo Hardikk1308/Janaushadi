@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/screens/manage_addresses_screen.dart';
 import 'package:dio/dio.dart';
@@ -135,7 +137,19 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Location services are disabled. Please enable them.');
+        print('⚠️ Location services are disabled');
+        setState(() {
+          _isLoadingLocation = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location services are disabled. You can manually enter your address.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
       }
 
       // Check location permissions
@@ -143,17 +157,48 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions are denied');
+          print('⚠️ Location permissions are denied');
+          setState(() {
+            _isLoadingLocation = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Location permissions are denied. You can manually enter your address.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied');
+        print('⚠️ Location permissions are permanently denied');
+        setState(() {
+          _isLoadingLocation = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permissions are permanently denied. You can manually enter your address.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
       }
 
-      // Get current position
+      // Get current position with timeout
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 10),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          print('⚠️ Location request timed out');
+          throw TimeoutException('Location request timed out after 15 seconds');
+        },
       );
 
       // Save coordinates
@@ -165,6 +210,12 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         List<Placemark> placemarks = await placemarkFromCoordinates(
           position.latitude,
           position.longitude,
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            print('⚠️ Geocoding request timed out');
+            return [];
+          },
         );
 
         if (placemarks.isNotEmpty) {
@@ -208,37 +259,50 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           });
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Location detected but address not found'),
-                backgroundColor: Colors.orange,
+              SnackBar(
+                content: Text('Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}'),
+                backgroundColor: Colors.green,
               ),
             );
           }
         }
       } catch (e) {
-        print('Geocoding error: $e');
+        print('⚠️ Geocoding error: $e');
         setState(() {
           _isLoadingLocation = false;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Location: ${position.latitude}, ${position.longitude}'),
+              content: Text('Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}'),
               backgroundColor: Colors.green,
             ),
           );
         }
       }
+    } on TimeoutException catch (e) {
+      print('❌ Location timeout: $e');
+      setState(() {
+        _isLoadingLocation = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location request timed out. Please manually enter your address.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     } catch (e) {
-      print('Location error: $e');
+      print('❌ Location error: $e');
       setState(() {
         _isLoadingLocation = false;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to get location: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Text('Location error: ${e.toString()}. You can manually enter your address.'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
@@ -246,13 +310,72 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
   }
 
   Future<void> _saveAddress() async {
-    if (_pincodeController.text.isEmpty ||
-        _houseNumberController.text.isEmpty ||
-        _cityController.text.isEmpty ||
-        _stateController.text.isEmpty) {
+    // Validate all required fields
+    if (_pincodeController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill all required fields'),
+          content: Text('Please enter pincode'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    if (_houseNumberController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter house number/building name'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    if (_cityController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter city'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    if (_stateController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter state'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    if (_streetController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter street/road name'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    if (_landmarkController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter landmark'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Validate pincode format (should be numeric)
+    if (!RegExp(r'^\d{6}$').hasMatch(_pincodeController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 6-digit pincode'),
           backgroundColor: Colors.red,
         ),
       );
@@ -279,10 +402,21 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       String typeToSend = _selectedType;
       String type2ToSend = '';
       
-      if (_selectedType == 'Other' && _selectedTypeOther.isNotEmpty) {
-        // When "Other" is selected, send the custom type in M1_TYPE1
-        typeToSend = _selectedTypeOther;
-        type2ToSend = 'Other'; // Keep "Other" as indicator
+      // If "Other" is selected, M1_TYPE2 must contain the custom type
+      if (_selectedType == 'Other') {
+        if (_selectedTypeOther.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter a custom address type for "Other"'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isSaving = false;
+          });
+          return;
+        }
+        type2ToSend = _selectedTypeOther;
       }
 
       print('🔍 DEBUG: _selectedType = $_selectedType');
@@ -292,21 +426,20 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       print('🔍 DEBUG: type2ToSend (M1_TYPE2) = $type2ToSend');
 
       // Prepare data for API
-      // The backend seems to have a bug where it returns "AddressType" regardless of input
-      // Try different field combinations to see which one works
+      // Build full address string for M1_ADD1
+      final fullAddressLine = '${_houseNumberController.text}, ${_streetController.text}';
+      
       final addressData = {
         'M1_CODE': m1Code,
         'M1_TYPE1': typeToSend,
-        'M1_TYPE': typeToSend,  // Try M1_TYPE as well
-        'M1_NAME': typeToSend,  // Also send as M1_NAME
         'M1_TYPE2': type2ToSend,
-        'M1_ADD1': fullAddress,
+        'M1_ADD1': fullAddressLine,
         'M1_ADD2': _cityController.text,
         'M1_ADD3': _stateController.text,
         'M1_ADD4': _pincodeController.text,
-        'M1_ADD5': _latitudeController.text,
-        'M1_ADD6': _longitudeController.text,
-        'M1_ADD7': _streetController.text.isNotEmpty ? _streetController.text : 'sadak no 45',
+        'M1_ADD5': _latitudeController.text.isNotEmpty ? _latitudeController.text : '0',
+        'M1_ADD6': _longitudeController.text.isNotEmpty ? _longitudeController.text : '0',
+        'M1_ADD7': _streetController.text,
         'M1_ADD8': _landmarkController.text,
       };
 
@@ -314,6 +447,26 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       addressData.forEach((key, value) {
         print('   $key: $value');
       });
+
+      // Validate that critical fields are not empty
+      if (addressData['M1_ADD1']?.toString().isEmpty ?? true) {
+        throw Exception('House number/building name is required');
+      }
+      if (addressData['M1_ADD2']?.toString().isEmpty ?? true) {
+        throw Exception('City is required');
+      }
+      if (addressData['M1_ADD3']?.toString().isEmpty ?? true) {
+        throw Exception('State is required');
+      }
+      if (addressData['M1_ADD4']?.toString().isEmpty ?? true) {
+        throw Exception('Pincode is required');
+      }
+      if (addressData['M1_ADD7']?.toString().isEmpty ?? true) {
+        throw Exception('Street/Road name is required');
+      }
+      if (addressData['M1_ADD8']?.toString().isEmpty ?? true) {
+        throw Exception('Landmark is required');
+      }
 
       // If editing existing address, include the address ID
       final isEditing = widget.address != null;
@@ -329,14 +482,22 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           ? 'https://www.onlineaushadhi.in/myadmin/UserApis/update_address'
           : 'https://www.onlineaushadhi.in/myadmin/UserApis/add_address',
         data: addressData,
-        options: Options(contentType: Headers.formUrlEncodedContentType),
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          validateStatus: (status) => status != null && status < 500,
+        ),
       );
 
       setState(() {
         _isSaving = false;
       });
 
-      if (response.statusCode == 200) {
+      print('📥 Response Status: ${response.statusCode}');
+      print('📥 Response Data: ${response.data}');
+
+      if (response.statusCode == 401) {
+        throw Exception('Authentication failed. Please login again.');
+      } else if (response.statusCode == 200) {
         final data = response.data;
         if (data['response'] == 'success') {
           print('✅ Address saved successfully');
@@ -362,7 +523,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           final address = Address(
             id: addressId,
             type: typeToSend,
-            fullAddress: fullAddress,
+            fullAddress: '${_houseNumberController.text}${_landmarkController.text.isNotEmpty ? ', ${_landmarkController.text}' : ''}, ${_cityController.text}, ${_stateController.text} - ${_pincodeController.text}',
             pincode: _pincodeController.text,
             houseNumber: _houseNumberController.text,
             landmark: _landmarkController.text,
@@ -396,7 +557,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           throw Exception(data['message'] ?? 'Failed to save address');
         }
       } else {
-        throw Exception('Server error: ${response.statusCode}');
+        throw Exception('Server error: ${response.statusCode} - ${response.statusMessage}');
       }
     } catch (e) {
       setState(() {
@@ -489,6 +650,51 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
               ),
             const SizedBox(height: 20),
 
+            // Custom address type input (only show if "Other" is selected)
+            if (_selectedType == 'Other')
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Please specify the address type',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedTypeOther = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'e.g., School, Hospital, Shop',
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF1976D2), width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+
             // Search for area
             TextField(
               controller: _searchController,
@@ -573,11 +779,33 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Landmark (Optional)
+            // Street/Road Name
+            TextField(
+              controller: _streetController,
+              decoration: InputDecoration(
+                hintText: 'Street/Road Name',
+                hintStyle: TextStyle(color: Colors.grey[400]),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Landmark
             TextField(
               controller: _landmarkController,
               decoration: InputDecoration(
-                hintText: 'Landmark (Optional)',
+                hintText: 'Landmark',
                 hintStyle: TextStyle(color: Colors.grey[400]),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),

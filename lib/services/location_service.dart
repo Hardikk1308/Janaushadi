@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class LocationService {
   static const String _locationKey = 'user_location';
   static const String _cityKey = 'user_city';
-  
+
   static LocationService? _instance;
   static LocationService get instance => _instance ??= LocationService._();
   LocationService._();
@@ -28,44 +30,63 @@ class LocationService {
         return await _getCachedCity();
       }
 
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 10),
-      );
+      // Get current position with timeout
+      Position position =
+          await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 10),
+          ).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              print('⚠️ Location request timed out');
+              throw TimeoutException('Location request timed out');
+            },
+          );
 
-      // Get city name from coordinates
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
+      // Get city name from coordinates with timeout
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(
+            position.latitude,
+            position.longitude,
+          ).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('⚠️ Geocoding request timed out');
+              return [];
+            },
+          );
 
       if (placemarks.isNotEmpty) {
         final placemark = placemarks.first;
-        final city = placemark.locality ?? placemark.subAdministrativeArea ?? 'Unknown';
-        
+        final city =
+            placemark.locality ?? placemark.subAdministrativeArea ?? 'Unknown';
+
         // Cache the city
         await _cacheCity(city);
         await _cacheLocation(position.latitude, position.longitude);
-        
+
         print('✅ Current city detected: $city');
         return city;
       }
+    } on TimeoutException catch (e) {
+      print('⚠️ Location timeout: $e');
+      return await _getCachedCity();
     } catch (e) {
       print('❌ Error getting current location: $e');
+      return await _getCachedCity();
     }
-    
+
     return await _getCachedCity();
   }
 
   /// Get city suggestions based on search query
   Future<List<String>> getCitySuggestions(String query) async {
     if (query.isEmpty) return [];
-    
+
     try {
       // Use geocoding to get location suggestions
       List<Location> locations = await locationFromAddress(query);
-      
+
       List<String> suggestions = [];
       for (Location location in locations.take(5)) {
         try {
@@ -73,12 +94,12 @@ class LocationService {
             location.latitude,
             location.longitude,
           );
-          
+
           if (placemarks.isNotEmpty) {
             final placemark = placemarks.first;
             final city = placemark.locality ?? placemark.subAdministrativeArea;
             final state = placemark.administrativeArea;
-            
+
             if (city != null && state != null) {
               final suggestion = '$city, $state';
               if (!suggestions.contains(suggestion)) {
@@ -90,13 +111,14 @@ class LocationService {
           print('❌ Error processing location: $e');
         }
       }
-      
+
       return suggestions;
     } catch (e) {
       print('❌ Error getting city suggestions: $e');
-      return getPopularCities().where((city) => 
-        city.toLowerCase().contains(query.toLowerCase())
-      ).take(5).toList();
+      return getPopularCities()
+          .where((city) => city.toLowerCase().contains(query.toLowerCase()))
+          .take(5)
+          .toList();
     }
   }
 
@@ -170,7 +192,7 @@ class LocationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final locationString = prefs.getString(_locationKey);
-      
+
       if (locationString != null) {
         final parts = locationString.split(',');
         if (parts.length == 2) {

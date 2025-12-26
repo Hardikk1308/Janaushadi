@@ -388,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
+
             // Header
             Padding(
               padding: const EdgeInsets.all(20),
@@ -397,10 +397,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   const Text(
                     'Select Location',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
@@ -409,14 +406,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            
+
             // Location Picker
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: LocationPicker(
-                  initialLocation: _currentCity != 'Loading...' && _currentCity != 'Select Location' 
-                      ? _currentCity 
+                  initialLocation:
+                      _currentCity != 'Loading...' &&
+                          _currentCity != 'Select Location'
+                      ? _currentCity
                       : null,
                   onLocationSelected: (location) {
                     setState(() {
@@ -1444,75 +1443,70 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       style: const TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey),
+                    const Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          Row(
+
+          Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.favorite_border),
-                onPressed: () {},
-              ),
-              Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.shopping_cart_outlined),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => FutureBuilder<List<Product>>(
-                            future: _productsFuture,
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData) {
-                                return CartScreen(
-                                  cartItems: _cartItems,
-                                  products: snapshot.data!,
-                                );
-                              }
-                              return const Scaffold(
-                                body: Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ).then((result) {
-                        // Update cart items if they were modified in CartScreen
-                        if (result is Map) {
-                          setState(() {
-                            _cartItems = Map<int, int>.from(result);
-                          });
-                        }
-                      });
-                    },
-                  ),
-                  if (totalItems > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '$totalItems',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                icon: const Icon(Icons.shopping_cart_outlined),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => FutureBuilder<List<Product>>(
+                        future: _productsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return CartScreen(
+                              cartItems: _cartItems,
+                              products: snapshot.data!,
+                            );
+                          }
+                          return const Scaffold(
+                            body: Center(child: CircularProgressIndicator()),
+                          );
+                        },
                       ),
                     ),
-                ],
+                  ).then((result) {
+                    // Update cart items if they were modified in CartScreen
+                    if (result is Map) {
+                      setState(() {
+                        _cartItems = Map<int, int>.from(result);
+                      });
+                    }
+                  });
+                },
               ),
+              if (totalItems > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$totalItems',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -2181,7 +2175,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               GestureDetector(
                 onTap: () {
-                  _navigateWithAnimation(CategoriesScreen(cartItems: _cartItems));
+                  _navigateWithAnimation(CategoriesScreen());
                 },
                 child: const Text(
                   'View All',
@@ -2266,7 +2260,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return GestureDetector(
       onTap: () {
-        _navigateWithAnimation(CategoriesScreen(cartItems: _cartItems));
+        _navigateWithAnimation(CategoriesScreen());
       },
       child: Column(
         children: [
@@ -2382,7 +2376,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         // const SizedBox(height: 12),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: FutureBuilder<List<Product>>(
             future: _productsFuture,
             builder: (context, snapshot) {
@@ -2432,8 +2426,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   childAspectRatio: 0.55,
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
                 ),
                 itemCount: displayProducts.length,
                 itemBuilder: (context, index) {
@@ -3449,7 +3443,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () {
         // Navigate to category products
-        _navigateWithAnimation(CategoriesScreen(cartItems: _cartItems));
+        _navigateWithAnimation(CategoriesScreen());
       },
       child: Column(
         children: [

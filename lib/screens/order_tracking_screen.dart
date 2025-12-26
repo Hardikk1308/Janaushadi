@@ -53,6 +53,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     _initializeOrder();
 
     _currentTrackingData = widget.trackingData;
+    
+    // Extract details from initial tracking data if available
+    if (_currentTrackingData != null) {
+      _extractTrackingDetails();
+    }
 
     // Load user data immediately as fallback
     _loadUserDataAsFallback();
@@ -62,6 +67,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
     // Fetch tracking data to get all details
     _refreshTrackingData();
+    
+    // Set up periodic refresh of tracking data every 30 seconds
+    Future.delayed(const Duration(seconds: 30), _setupPeriodicRefresh);
+  }
+
+  void _setupPeriodicRefresh() {
+    if (mounted) {
+      _refreshTrackingData();
+      // Schedule next refresh
+      Future.delayed(const Duration(seconds: 30), _setupPeriodicRefresh);
+    }
   }
 
   @override
@@ -152,17 +168,43 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
         // Load address if not already set
         if (deliveryAddress.isEmpty) {
-          final add1 = userDataMap['M1_ADD1']?.toString() ?? '';
-          // Check if M1_ADD1 is just a numeric ID (address ID)
-          if (add1.isNotEmpty &&
-              int.tryParse(add1) != null &&
-              add1.length < 10) {
-            // It's likely an address ID, fetch the full address
-            print('📍 Detected address ID in user data: $add1');
-            _fetchAddressById(add1);
-          } else if (add1.isNotEmpty) {
-            // It's a full address, use it directly
-            deliveryAddress = add1;
+          // First, try to get address from the address array (saved addresses)
+          if (userDataMap['address'] is List && (userDataMap['address'] as List).isNotEmpty) {
+            print('📍 Found address array in user data');
+            final addressArray = userDataMap['address'] as List;
+            
+            // Get the first active address, or the first address if none are active
+            Map<String, dynamic>? selectedAddress;
+            for (var addr in addressArray) {
+              if (addr['M1_BT']?.toString().toLowerCase() == 'active') {
+                selectedAddress = addr;
+                break;
+              }
+            }
+            
+            // If no active address found, use the first one
+            selectedAddress ??= addressArray.first;
+            
+            if (selectedAddress != null) {
+              final add1 = selectedAddress['M1_ADD1']?.toString() ?? '';
+              if (add1.isNotEmpty) {
+                deliveryAddress = add1;
+                print('📍 Extracted address from address array: $deliveryAddress');
+              }
+            }
+          } else {
+            // Fallback to M1_ADD1 from main user data
+            final add1 = userDataMap['M1_ADD1']?.toString() ?? '';
+            if (add1.isNotEmpty &&
+                int.tryParse(add1) != null &&
+                add1.length < 10) {
+              // It's likely an address ID, fetch the full address
+              print('📍 Detected address ID in user data: $add1');
+              _fetchAddressById(add1);
+            } else if (add1.isNotEmpty) {
+              // It's a full address, use it directly
+              deliveryAddress = add1;
+            }
           }
         }
 
@@ -563,6 +605,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
         if (trackingData != null && mounted) {
           print('✅ Tracking data received successfully');
+          
+          // Animate the status update
+          await _animateStatusUpdate(trackingData);
+          
           setState(() {
             _currentTrackingData = trackingData;
             _extractTrackingDetails();
@@ -585,6 +631,87 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         });
       }
     }
+  }
+
+  Future<void> _animateStatusUpdate(Map<String, dynamic> trackingData) async {
+    try {
+      final data = trackingData['data'];
+      if (data is! List || data.isEmpty) return;
+
+      final orderInfo = data[0];
+      final newStatus = orderInfo['F4_BT']?.toString() ?? 'Placed';
+      
+      print('📊 Current status: ${orderData['currentStatus']}, New status: $newStatus');
+      
+      // Only animate if status has changed
+      if (newStatus != orderData['currentStatus']) {
+        print('🎬 Status changed! Animating update...');
+        
+        // Play pulse animation
+        _pulseController.forward();
+        await Future.delayed(const Duration(milliseconds: 500));
+        _pulseController.reverse();
+        
+        // Update status with animation
+        if (mounted) {
+          setState(() {
+            orderData['currentStatus'] = newStatus;
+            _updateStatusIndex(newStatus);
+          });
+        }
+        
+        // Show success snackbar with animation
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Order status updated to: $newStatus',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green[600],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: const EdgeInsets.all(16),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error animating status update: $e');
+    }
+  }
+
+  void _updateStatusIndex(String status) {
+    final statusMap = {
+      'Placed': 0,
+      'Dispatch': 1,
+      'Delivery': 2,
+      'Delivered': 3,
+    };
+    
+    orderData['statusIndex'] = statusMap[status] ?? 0;
   }
 
   void _extractTrackingDetails() {
@@ -697,9 +824,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
             'Item';
         print('   - $itemName: Qty $qty');
       }
+      print('✅ Total items calculated: $totalItemsCount');
     } else {
       print('⚠️ No items/products array found in order info');
+      totalItemsCount = 0;
     }
+
+    // Update timeline based on actual order status
+    _updateTimelineBasedOnStatus(orderInfo['F4_BT']?.toString() ?? 'Placed');
 
     print('📦 Extracted tracking details:');
     print('   Customer: $customerName');
@@ -707,6 +839,34 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     print('   Address: $deliveryAddress');
     print('   Payment Mode: $paymentMode');
     print('   Total Items: $totalItemsCount');
+  }
+
+  void _updateTimelineBasedOnStatus(String status) {
+    print('🔄 Updating timeline based on status: $status');
+    
+    final statusLower = status.toLowerCase();
+    
+    // Reset all timeline items
+    for (var item in orderData['timeline']) {
+      item['completed'] = false;
+    }
+    
+    // Mark completed items based on status
+    if (statusLower == 'placed' || statusLower == 'dispatch' || statusLower == 'delivery' || statusLower == 'delivered') {
+      orderData['timeline'][0]['completed'] = true; // Order placed
+    }
+    
+    if (statusLower == 'dispatch' || statusLower == 'delivery' || statusLower == 'delivered') {
+      orderData['timeline'][1]['completed'] = true; // Dispatch
+    }
+    
+    if (statusLower == 'delivery' || statusLower == 'delivered') {
+      orderData['timeline'][2]['completed'] = true; // Delivery
+      // Update the delivery message for delivered orders
+      orderData['timeline'][2]['message'] = 'Order delivered successfully';
+    }
+    
+    print('✅ Timeline updated');
   }
 
   Future<Map<String, dynamic>?> _trackOrder({
@@ -1067,10 +1227,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
   Widget _buildOrderedProducts() {
     List<dynamic>? products;
-    int itemCount = 0;
+    int itemCount = totalItemsCount; // Use the extracted total items count
 
     print('🔍 Building ordered products section...');
     print('   Has tracking data: ${_currentTrackingData != null}');
+    print('   Total items count from extraction: $totalItemsCount');
 
     // Try to get products from tracking data
     if (_currentTrackingData != null) {
@@ -1105,8 +1266,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
       print('   ⚠️ No tracking data available at all');
     }
 
-    // Calculate item count
+    // Calculate item count from products if available
     if (products != null && products.isNotEmpty) {
+      itemCount = 0;
       for (var product in products) {
         // Handle multiple quantity field names
         final qty =
@@ -1121,10 +1283,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
       }
       print('✅ Total items to display: $itemCount');
     } else {
-      print('⚠️ No products to display');
+      print('⚠️ No products to display, using extracted count: $itemCount');
     }
 
-    // If no products from API, show appropriate message
+    // If no products from API, show appropriate message but still show the count
     if (products == null || products.isEmpty) {
       return Container(
         width: double.infinity,
@@ -1144,21 +1306,45 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(
-                  Icons.shopping_bag_outlined,
-                  color: AppConstants.primaryColor,
-                  size: 24,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.shopping_bag_outlined,
+                      color: AppConstants.primaryColor,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Ordered Products',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Ordered Products',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+                if (itemCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppConstants.primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.primaryColor,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -1589,17 +1775,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
   }
 
   Widget _buildDeliveryDetails() {
-    // Show delivery details if we have tracking data or fallback data
+    // Show delivery details - always show the section
     final address = deliveryAddress.isNotEmpty ? deliveryAddress : '';
     final name = customerName.isNotEmpty && customerName != 'Customer'
         ? customerName
         : '';
     final phone = customerPhone.isNotEmpty ? customerPhone : '';
-
-    // Don't show if no meaningful data available
-    if (address.isEmpty && phone.isEmpty && name.isEmpty) {
-      return const SizedBox.shrink();
-    }
 
     return Container(
       width: double.infinity,
@@ -1677,12 +1858,27 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
               ),
             ),
           ] else ...[
-            Text(
-              'Delivery address not available',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-                fontStyle: FontStyle.italic,
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.amber[700], size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Delivery address will be updated soon',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.amber[900],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -2070,22 +2266,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'delivered':
-        return Colors.green[700]!;
-      case 'cancelled':
-        return Colors.red[700]!;
-      case 'dispatch':
-      case 'dispatched':
-        return Colors.orange[700]!;
-      case 'order placed':
-      case 'pending':
-        return Colors.blue[700]!;
-      default:
-        return Colors.grey[700]!;
-    }
-  }
 
   Widget _buildSimpleTimeline() {
     return Container(

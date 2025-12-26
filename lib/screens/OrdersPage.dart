@@ -252,6 +252,16 @@ class _OrdersPageState extends State<OrdersPage>
           fontWeight: FontWeight.w600,
         ),
         iconTheme: const IconThemeData(color: Colors.black87),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+          },
+        ),
       ),
       backgroundColor: const Color(0xFFFAFAFA),
       body: _isLoading
