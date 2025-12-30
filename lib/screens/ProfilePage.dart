@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/services/order_service.dart';
 import 'package:jan_aushadi/services/auth_service.dart';
+import 'package:jan_aushadi/screens/manage_addresses_screen.dart';
+import 'package:jan_aushadi/screens/OrdersPage.dart';
+import 'package:jan_aushadi/screens/MainApp.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
@@ -310,28 +313,27 @@ class _ProfilePageState extends State<ProfilePage> {
                   onTap: () => _showEditProfileDialog(),
                 ),
                 _buildDivider(),
-
-                // _buildMenuItem(
-                //   icon: Icons.history,
-                //   title: 'Order History',
-                //   onTap: _orders.isNotEmpty
-                //       ? () {
-                //           final order = _orders.first;
-                //           Navigator.push(
-                //             context,
-                //             MaterialPageRoute(
-                //               builder: (context) => OrderTrackingScreen(
-                //                 orderId: order['orderId'] ?? 'ORD-001',
-                //                 totalAmount: (order['totalAmount'] ?? 0)
-                //                     .toDouble(),
-                //                 paymentMethod: order['paymentMethod'] ?? 'card',
-                //                 cartItems: order['cartItems'],
-                //               ),R
-                //             ),
-                //           );
-                //         }
-                //       : () => _showSnackBar('No orders found'),
-                // ),
+                _buildMenuItem(
+                  icon: Icons.shopping_bag_outlined,
+                  title: 'My Orders',
+                  onTap: () {
+                    // Change to Orders tab (index 1)
+                    MainApp.changeTab(context, 1);
+                  },
+                ),
+                _buildDivider(),
+                _buildMenuItem(
+                  icon: Icons.location_on_outlined,
+                  title: 'Manage Addresses',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ManageAddressesScreen(isSelectMode: false),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -606,7 +608,12 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                nameController.dispose();
+                emailController.dispose();
+                dobController.dispose();
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
@@ -617,6 +624,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   gender: selectedGender,
                   dob: _convertToStorageFormat(dobController.text),
                 );
+                nameController.dispose();
+                emailController.dispose();
+                dobController.dispose();
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(

@@ -641,7 +641,7 @@ class _CartScreenState extends State<CartScreen> {
       }
 
       print('📍 Cart stack trace: ${StackTrace.current}');
-      
+
       // Close loading dialog using root navigator
       if (mounted) {
         try {
@@ -650,11 +650,11 @@ class _CartScreenState extends State<CartScreen> {
           print('⚠️ Could not close dialog: $e');
         }
       }
-      
+
       setState(() {
         _isProcessingPayment = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1167,7 +1167,7 @@ class _CartScreenState extends State<CartScreen> {
                                     ),
                                     if (_savings > 0)
                                       _buildBillRow(
-                                        'You Saved',
+                                        'Discount',
                                         '-₹${_savings.toStringAsFixed(2)}',
                                       ),
                                     _buildBillRow(

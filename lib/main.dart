@@ -1,4 +1,8 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:jan_aushadi/services/fcm_service.dart';
+import 'firebase_options.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
 import 'package:jan_aushadi/screens/OrdersPage.dart';
 import 'package:jan_aushadi/screens/splash/splash_screen.dart';
@@ -6,15 +10,40 @@ import 'package:jan_aushadi/screens/auth/phone_login_screen.dart';
 import 'package:jan_aushadi/screens/MainApp.dart';
 import 'package:jan_aushadi/screens/all_products_screen.dart';
 import 'package:jan_aushadi/screens/search_screen.dart';
+import 'package:jan_aushadi/screens/notification_test_screen.dart';
 import 'package:jan_aushadi/services/cart_service.dart';
+import 'package:jan_aushadi/widgets/in_app_notification_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize cart service
+  // 🔥 Firebase init with error handling
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('✅ Firebase initialized successfully');
+
+    // 🔔 Ask notification permission (Android 13+ / iOS)
+    try {
+      await FirebaseMessaging.instance.requestPermission();
+      print('✅ Notification permission requested');
+    } catch (e) {
+      print('⚠️ Could not request notification permission: $e');
+    }
+  } catch (e) {
+    print('❌ Firebase initialization failed: $e');
+    print('ℹ️ Ensure google-services.json is in android/app/ directory');
+    print('ℹ️ App will continue without Firebase');
+  }
+
+  // 🛒 Init cart
   await CartService.initialize();
 
   runApp(MyApp());
+
+  // 🚀 Initialize FCM AFTER app start
+  FCMService().initializeFCM();
 }
 
 class MyApp extends StatelessWidget {
@@ -148,6 +177,7 @@ class MyApp extends StatelessWidget {
         '/order': (context) => const OrdersPage(),
         '/all_products': (context) => const AllProductsScreen(),
         '/search': (context) => const SearchScreen(),
+        '/notification_test': (context) => const NotificationTestScreen(),
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(
@@ -156,9 +186,11 @@ class MyApp extends StatelessWidget {
         );
       },
       builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-          child: child ?? const SizedBox(),
+        return InAppNotificationOverlay(
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+            child: child ?? const SizedBox(),
+          ),
         );
       },
     );

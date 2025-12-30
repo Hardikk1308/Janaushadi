@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
 import 'package:jan_aushadi/models/Product_model.dart' as product_model;
-import 'package:jan_aushadi/screens/cart_screen.dart';
 import 'package:jan_aushadi/screens/product_details_screen.dart';
 import 'package:jan_aushadi/widgets/secure_image_widget.dart';
 import 'package:dio/dio.dart';
@@ -142,8 +141,6 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  int get _cartItemCount =>
-      _cartItems.values.fold<int>(0, (sum, qty) => sum + qty);
 
   void _navigateToProductDetails(Product product) async {
     // Add a subtle haptic feedback
@@ -180,22 +177,6 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  void _openCart() {
-    if (_allProducts.isEmpty) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            CartScreen(cartItems: _cartItems, products: _allProducts),
-      ),
-    ).then((_) async {
-      await _loadCartFromStorage();
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
 
   @override
   void dispose() {

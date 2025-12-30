@@ -45,6 +45,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
   String paymentMode = '';
   bool _isLoadingTrackingData = false;
   bool _isLoadingAddress = false;
+  
+  // Vendor and Rider information
+  String vendorName = '';
+  String vendorBusinessName = '';
+  String vendorPhone = '';
+  String riderName = '';
+  String riderPhone = '';
 
   @override
   void initState() {
@@ -247,7 +254,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
       final dio = Dio();
       final response = await dio.post(
-        'https://webdevelopercg.com/janaushadhi/myadmin/UserApis/get_user_address',
+        '${AppConstants.baseUrl}/get_user_address',
         data: {'M1_CODE': m1Code},
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
@@ -486,7 +493,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
                 // Call the cancel order API - using update_order_status instead
                 final response = await dio.post(
-                  'https://webdevelopercg.com/janaushadhi/myadmin/UserApis/update_order_status',
+                  '${AppConstants.baseUrl}/update_order_status',
                   data: {
                     'M1_CODE': m1Code,
                     'F4_NO': widget.orderId,
@@ -784,6 +791,22 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         orderInfo['payment_method']?.toString() ??
         widget.paymentMethod;
 
+    // Extract vendor information
+    vendorName = orderInfo['VEN_NAME']?.toString() ?? '';
+    vendorBusinessName = orderInfo['VEN_BNAME']?.toString() ?? '';
+    vendorPhone = orderInfo['VEN_TEL1']?.toString() ?? '';
+
+    // Extract rider information
+    riderName = orderInfo['RIDER_NAME']?.toString() ?? '';
+    riderPhone = orderInfo['RIDER_TEL1']?.toString() ?? '';
+
+    print('📦 Extracted vendor info:');
+    print('   Vendor Name: $vendorName');
+    print('   Vendor Business: $vendorBusinessName');
+    print('   Vendor Phone: $vendorPhone');
+    print('   Rider Name: $riderName');
+    print('   Rider Phone: $riderPhone');
+
     // If we have an address ID, fetch the full address
     if (addressId != null) {
       print('🔄 Calling _fetchAddressById with ID: $addressId');
@@ -881,7 +904,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
       );
 
       final response = await dio.post(
-        'https://webdevelopercg.com/janaushadhi/myadmin/UserApis/order_details',
+        '${AppConstants.baseUrl}/order_details',
         data: {'M1_CODE': m1Code, 'F4_NO': orderNumber},
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
@@ -1390,68 +1413,255 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
       );
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return Column(
+      children: [
+        // Vendor and Rider Information Card
+        if (vendorName.isNotEmpty || riderName.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Vendor Information
+                if (vendorName.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.store_outlined,
+                        color: AppConstants.primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Vendor',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              vendorName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            if (vendorBusinessName.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                vendorBusinessName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            if (vendorPhone.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              GestureDetector(
+                                onTap: () {
+                                  // Copy phone to clipboard
+                                  Clipboard.setData(
+                                    ClipboardData(text: vendorPhone),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Phone copied to clipboard'),
+                                      duration: Duration(seconds: 1),
+                                    ),
+                                  );
+                                },
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.phone_outlined,
+                                      size: 14,
+                                      color: AppConstants.primaryColor,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      vendorPhone,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppConstants.primaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (riderName.isNotEmpty) const SizedBox(height: 16),
+                ],
+
+                // Rider Information
+                if (riderName.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.two_wheeler_outlined,
+                        color: Colors.orange,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Delivery Partner',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              riderName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            if (riderPhone.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              GestureDetector(
+                                onTap: () {
+                                  // Copy phone to clipboard
+                                  Clipboard.setData(
+                                    ClipboardData(text: riderPhone),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Phone copied to clipboard'),
+                                      duration: Duration(seconds: 1),
+                                    ),
+                                  );
+                                },
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.phone_outlined,
+                                      size: 14,
+                                      color: Colors.orange,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      riderPhone,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.orange,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+        // Products List Card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(
-                    Icons.shopping_bag_outlined,
-                    color: AppConstants.primaryColor,
-                    size: 24,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.shopping_bag_outlined,
+                        color: AppConstants.primaryColor,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Ordered Products',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Ordered Products',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black87,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppConstants.primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.primaryColor,
+                      ),
                     ),
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppConstants.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppConstants.primaryColor,
-                  ),
-                ),
-              ),
+              const SizedBox(height: 16),
+              ...products.map((product) => _buildProductItem(product)).toList(),
             ],
           ),
-          const SizedBox(height: 16),
-          ...products.map((product) => _buildProductItem(product)).toList(),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1529,7 +1739,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
       if (imageName != null && imageName.isNotEmpty) {
         imageUrl =
-            'https://webdevelopercg.com/janaushadhi/myadmin/uploads/product/$imageName';
+            '${AppConstants.baseImageUrl}/$imageName';
         print('   ✅ Image URL: $imageUrl');
       } else {
         print('   ⚠️ No valid image name found');
@@ -1710,7 +1920,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
       final dio = Dio();
       final response = await dio.post(
-        'https://webdevelopercg.com/janaushadhi/myadmin/UserApis/product_details',
+        '${AppConstants.baseUrl}/product_details',
         data: {'product_id': productId},
         options: Options(
           contentType: Headers.formUrlEncodedContentType,

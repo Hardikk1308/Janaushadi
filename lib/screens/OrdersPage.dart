@@ -23,6 +23,11 @@ class _OrdersPageState extends State<OrdersPage>
   List<Order> deliveredOrders = [];
   List<Order> cancelledOrders = [];
 
+  // Date filter variables
+  DateTime? _selectedDate;
+  final int _itemsPerPage = 5;
+  int _currentPage = 1;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +35,7 @@ class _OrdersPageState extends State<OrdersPage>
     _tabController.addListener(() {
       setState(() {
         _selectedTab = _tabController.index;
+        _currentPage = 1; // Reset to first page when changing tabs
       });
     });
     _loadCustomerName();
@@ -69,7 +75,7 @@ class _OrdersPageState extends State<OrdersPage>
 
       // Fetch all orders at once (API returns all orders)
       print('\n📦 Fetching all orders...');
-      
+
       final response = await dio.post(
         'https://www.onlineaushadhi.in/myadmin/UserApis/order_list',
         data: {'M1_CODE': m1Code},
@@ -104,22 +110,26 @@ class _OrdersPageState extends State<OrdersPage>
             final data = responseData['data'] as List?;
 
             if (data != null && data.isNotEmpty) {
-              final allOrders = data.map((item) => Order.fromJson(item)).toList();
-              
-              // Categorize orders by status
-              placedOrders = allOrders.where((order) => 
-                order.status.toLowerCase() == 'placed'
-              ).toList();
-              
-              deliveredOrders = allOrders.where((order) => 
-                order.status.toLowerCase() == 'delivered'
-              ).toList();
-              
-              cancelledOrders = allOrders.where((order) => 
-                order.status.toLowerCase() == 'cancelled'
-              ).toList();
+              final allOrders = data
+                  .map((item) => Order.fromJson(item))
+                  .toList();
 
-              print('📊 Placed: ${placedOrders.length}, Delivered: ${deliveredOrders.length}, Cancelled: ${cancelledOrders.length}');
+              // Categorize orders by status
+              placedOrders = allOrders
+                  .where((order) => order.status.toLowerCase() == 'placed')
+                  .toList();
+
+              deliveredOrders = allOrders
+                  .where((order) => order.status.toLowerCase() == 'delivered')
+                  .toList();
+
+              cancelledOrders = allOrders
+                  .where((order) => order.status.toLowerCase() == 'cancelled')
+                  .toList();
+
+              print(
+                '📊 Placed: ${placedOrders.length}, Delivered: ${deliveredOrders.length}, Cancelled: ${cancelledOrders.length}',
+              );
             } else {
               print('⚠️ No data array found in response or empty');
               // Set empty lists
@@ -127,8 +137,11 @@ class _OrdersPageState extends State<OrdersPage>
               deliveredOrders = [];
               cancelledOrders = [];
             }
-          } else if (responseData['response'] == 'error' && 
-                     responseData['message']?.toString().toLowerCase().contains('no data') == true) {
+          } else if (responseData['response'] == 'error' &&
+              responseData['message']?.toString().toLowerCase().contains(
+                    'no data',
+                  ) ==
+                  true) {
             // Handle "No Data Found" case - this is not an error, just no orders yet
             print('ℹ️ No orders found for this user');
             placedOrders = [];
@@ -139,7 +152,9 @@ class _OrdersPageState extends State<OrdersPage>
             print('   Response keys: ${responseData.keys.toList()}');
             print('   Response["response"]: ${responseData['response']}');
             print('   Response["message"]: ${responseData['message']}');
-            throw Exception('API Error: ${responseData['message'] ?? 'Unknown error'}');
+            throw Exception(
+              'API Error: ${responseData['message'] ?? 'Unknown error'}',
+            );
           }
         } else {
           throw Exception('Invalid response format: Response is not a map');
@@ -168,7 +183,84 @@ class _OrdersPageState extends State<OrdersPage>
     }
   }
 
+  // Filter orders based on selected date
+  List<Order> _getFilteredOrders(List<Order> orders) {
+    if (_selectedDate == null) {
+      return orders;
+    }
 
+    return orders.where((order) {
+      try {
+        final orderDate = DateTime.parse(order.date.replaceAll(' ', 'T'));
+        // Compare only the date part (ignore time)
+        return orderDate.year == _selectedDate!.year &&
+            orderDate.month == _selectedDate!.month &&
+            orderDate.day == _selectedDate!.day;
+      } catch (e) {
+        return true;
+      }
+    }).toList();
+  }
+
+  // Get paginated orders
+  List<Order> _getPaginatedOrders(List<Order> orders) {
+    final filteredOrders = _getFilteredOrders(orders);
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+
+    if (startIndex >= filteredOrders.length) {
+      return [];
+    }
+
+    return filteredOrders.sublist(
+      startIndex,
+      endIndex > filteredOrders.length ? filteredOrders.length : endIndex,
+    );
+  }
+
+  // Get total pages for current tab
+  int _getTotalPages(List<Order> orders) {
+    final filteredOrders = _getFilteredOrders(orders);
+    return (filteredOrders.length / _itemsPerPage).ceil();
+  }
+
+  // Show date picker
+  Future<void> _showDatePicker() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF1976D2),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _currentPage = 1; // Reset to first page
+      });
+    }
+  }
+
+  // Clear date filter
+  void _clearDateFilter() {
+    setState(() {
+      _selectedDate = null;
+      _currentPage = 1;
+    });
+  }
 
   void _trackOrder(Order order) {
     // Convert orderItems to the format expected by tracking screen
@@ -231,6 +323,134 @@ class _OrdersPageState extends State<OrdersPage>
     });
   }
 
+  // Cancel order
+  Future<void> _cancelOrder(Order order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: Text(
+          'Are you sure you want to cancel order #${order.orderNumber}?\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No, Keep It'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Yes, Cancel Order',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Show loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)),
+          ),
+        ),
+      );
+    }
+
+    try {
+      final dio = Dio();
+      final m1Code = await AuthService.getM1Code();
+
+      if (m1Code == null || m1Code.isEmpty) {
+        throw Exception('User not authenticated');
+      }
+
+      print('🚫 Cancelling order: ${order.orderNumber}');
+
+      // Call the cancel order API
+      final response = await dio.post(
+        'https://www.onlineaushadhi.in/myadmin/UserApis/cancel_order',
+        data: {'M1_CODE': m1Code, 'F4_NO': order.orderNumber},
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Jan-Aushadhi-App/1.0',
+          },
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+
+      print(
+        '🚫 Cancel order response: ${response.statusCode} - ${response.data}',
+      );
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      if (response.statusCode == 200) {
+        var responseData = response.data;
+
+        if (responseData is String) {
+          try {
+            responseData = jsonDecode(responseData);
+          } catch (e) {
+            print('Error parsing cancel response: $e');
+          }
+        }
+
+        if (responseData is Map &&
+            responseData['response']?.toString().toLowerCase() == 'success') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Order cancelled successfully'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            // Refresh orders
+            _fetchOrders();
+          }
+        } else {
+          throw Exception(responseData['message'] ?? 'Failed to cancel order');
+        }
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error cancelling order: $e');
+
+      // Close loading dialog if still open
+      if (mounted) {
+        try {
+          Navigator.of(context, rootNavigator: true).pop();
+        } catch (e) {
+          print('⚠️ Could not close dialog: $e');
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to cancel order: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -267,17 +487,146 @@ class _OrdersPageState extends State<OrdersPage>
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Color(0xFF1976D2),
-                ),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)),
               ),
             )
           : Column(
               children: [
+                // Date Filter Section
+                Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1976D2).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.calendar_today,
+                              color: Color(0xFF1976D2),
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Filter Orders by Date',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: _showDatePicker,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: _selectedDate != null
+                                  ? const Color(0xFF1976D2)
+                                  : Colors.grey[300]!,
+                              width: _selectedDate != null ? 2 : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            color: _selectedDate != null
+                                ? const Color(0xFF1976D2).withOpacity(0.05)
+                                : Colors.white,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.event,
+                                color: _selectedDate != null
+                                    ? const Color(0xFF1976D2)
+                                    : Colors.grey[400],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Select Date',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _selectedDate != null
+                                          ? '${_selectedDate!.day} ${_getMonthName(_selectedDate!.month)} ${_selectedDate!.year}'
+                                          : 'Tap to select a date',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: _selectedDate != null
+                                            ? const Color(0xFF1976D2)
+                                            : Colors.grey[400],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (_selectedDate != null) ...[
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: _clearDateFilter,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red[50],
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(
+                                      Icons.close,
+                                      color: Colors.red[600],
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ] else
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.grey[400],
+                                  size: 16,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 // Tab Bar
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  padding: const EdgeInsets.all(4),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 12,
+                  ),
+                  padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
@@ -285,7 +634,11 @@ class _OrdersPageState extends State<OrdersPage>
                   child: Row(
                     children: [
                       Expanded(
-                        child: _buildTabButton('Placed', 0, placedOrders.length),
+                        child: _buildTabButton(
+                          'Placed',
+                          0,
+                          placedOrders.length,
+                        ),
                       ),
                       Expanded(
                         child: _buildTabButton(
@@ -331,7 +684,11 @@ class _OrdersPageState extends State<OrdersPage>
   }
 
   Widget _buildOrdersList(List<Order> orders, String emptyMessage) {
-    if (orders.isEmpty) {
+    final paginatedOrders = _getPaginatedOrders(orders);
+    final totalPages = _getTotalPages(orders);
+    final filteredCount = _getFilteredOrders(orders).length;
+
+    if (filteredCount == 0) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(40),
@@ -366,10 +723,63 @@ class _OrdersPageState extends State<OrdersPage>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: orders.length,
-      itemBuilder: (context, index) => _buildOrderCard(orders[index]),
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            itemCount: paginatedOrders.length,
+            itemBuilder: (context, index) =>
+                _buildOrderCard(paginatedOrders[index]),
+          ),
+        ),
+        // Pagination controls
+        if (totalPages > 1)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: _currentPage > 1
+                      ? () => setState(() => _currentPage--)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    maximumSize: const Size(120, 40),
+                    backgroundColor: const Color(0xFF1976D2),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey[300],
+                  ),
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  // label: const Text('Previous'),
+                ),
+                Text(
+                  'Page $_currentPage of $totalPages',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _currentPage < totalPages
+                      ? () => setState(() => _currentPage++)
+                      : null,
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1976D2),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey[300],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -511,63 +921,6 @@ class _OrdersPageState extends State<OrdersPage>
 
           const SizedBox(height: 12),
 
-          // Items List
-          if (order.orderItems.isNotEmpty) ...[
-            const Divider(height: 20),
-            Text(
-              'Items (${order.orderItems.length})',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...order.orderItems.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.productName,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Qty: ${item.quantity}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '₹${item.totalSale.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            )),
-            const Divider(height: 20),
-          ],
-
           // Amount Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -596,26 +949,57 @@ class _OrdersPageState extends State<OrdersPage>
           // Single Action Button
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => _trackOrder(order),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1976D2),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _trackOrder(order),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1976D2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      order.status.toLowerCase() == 'cancelled'
+                          ? 'View Details'
+                          : 'Track Order',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
-                elevation: 0,
-              ),
-              child: Text(
-                order.status.toLowerCase() == 'cancelled'
-                    ? 'View Details'
-                    : 'Track Order',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+                // Cancel button - only show for placed orders
+                if (order.status.toLowerCase() == 'placed') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _cancelOrder(order),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[400],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Cancel Order',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -623,10 +1007,32 @@ class _OrdersPageState extends State<OrdersPage>
     );
   }
 
+  String _getMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[month - 1];
+  }
+
   String _formatDate(String dateStr) {
     try {
       final date = DateTime.parse(dateStr.replaceAll(' ', 'T'));
-      return '${date.day}/${date.month}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      final hour12 = date.hour > 12
+          ? date.hour - 12
+          : (date.hour == 0 ? 12 : date.hour);
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      return '${date.day}/${date.month}/${date.year} at ${hour12.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} $period';
     } catch (e) {
       return dateStr;
     }
@@ -1233,7 +1639,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   String _formatDate(String dateStr) {
     try {
       final date = DateTime.parse(dateStr.replaceAll(' ', 'T'));
-      return '${date.day}/${date.month}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      final hour12 = date.hour > 12
+          ? date.hour - 12
+          : (date.hour == 0 ? 12 : date.hour);
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      return '${date.day}/${date.month}/${date.year} at ${hour12.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} $period';
     } catch (e) {
       return dateStr;
     }

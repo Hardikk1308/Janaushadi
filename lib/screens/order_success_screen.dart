@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:jan_aushadi/screens/OrdersPage.dart';
+import 'package:jan_aushadi/screens/MainApp.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
   final String orderId;
@@ -291,11 +291,16 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
+                        // Clear navigation stack and go to home, then switch to Orders tab
                         Navigator.pushNamedAndRemoveUntil(
                           context,
-                          '/order',
+                          '/order/${widget.orderId}',
                           (route) => false,
                         );
+                        // Switch to Orders tab after clearing stack
+                        Future.delayed(const Duration(milliseconds: 50), () {
+                          MainApp.changeTab(context, 1);
+                        });
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1976D2),

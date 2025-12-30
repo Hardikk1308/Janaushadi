@@ -11,11 +11,7 @@ class AddressDetailsScreen extends StatefulWidget {
   final Address? address;
   final Function(Address) onSave;
 
-  const AddressDetailsScreen({
-    super.key,
-    this.address,
-    required this.onSave,
-  });
+  const AddressDetailsScreen({super.key, this.address, required this.onSave});
 
   @override
   State<AddressDetailsScreen> createState() => _AddressDetailsScreenState();
@@ -33,7 +29,8 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
   final _longitudeController = TextEditingController();
 
   String _selectedType = 'Home'; // This will store the type name for UI
-  String _selectedTypeId = ''; // This will store the actual type ID to send to API
+  String _selectedTypeId =
+      ''; // This will store the actual type ID to send to API
   String _selectedTypeOther = '';
   bool _isLoadingLocation = false;
   bool _isSaving = false;
@@ -80,21 +77,23 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           (data['data'] as List).forEach((item) {
             print('   Item: $item');
           });
-          
+
           setState(() {
-            _addressTypes = (data['data'] as List)
-                .map((item) {
-                  final addressType = AddressType.fromJson(item);
-                  print('   Parsed: type=${addressType.type}, name=${addressType.name}');
-                  return addressType;
-                })
-                .toList();
+            _addressTypes = (data['data'] as List).map((item) {
+              final addressType = AddressType.fromJson(item);
+              print(
+                '   Parsed: type=${addressType.type}, name=${addressType.name}',
+              );
+              return addressType;
+            }).toList();
             _isLoadingTypes = false;
             // Set default to first type if available
             if (_addressTypes.isNotEmpty && widget.address == null) {
               _selectedType = _addressTypes.first.name;
               _selectedTypeId = _addressTypes.first.type;
-              print('📍 Set default type: $_selectedType (ID: $_selectedTypeId)');
+              print(
+                '📍 Set default type: $_selectedType (ID: $_selectedTypeId)',
+              );
             }
           });
         }
@@ -127,7 +126,6 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
     super.dispose();
   }
 
-
   Future<void> _useCurrentLocation() async {
     setState(() {
       _isLoadingLocation = true;
@@ -144,7 +142,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location services are disabled. You can manually enter your address.'),
+              content: Text(
+                'Location services are disabled. You can manually enter your address.',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -164,7 +164,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Location permissions are denied. You can manually enter your address.'),
+                content: Text(
+                  'Location permissions are denied. You can manually enter your address.',
+                ),
                 backgroundColor: Colors.orange,
               ),
             );
@@ -181,7 +183,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location permissions are permanently denied. You can manually enter your address.'),
+              content: Text(
+                'Location permissions are permanently denied. You can manually enter your address.',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -190,16 +194,19 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       }
 
       // Get current position with timeout
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 10),
-      ).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          print('⚠️ Location request timed out');
-          throw TimeoutException('Location request timed out after 15 seconds');
-        },
-      );
+      Position position =
+          await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 10),
+          ).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              print('⚠️ Location request timed out');
+              throw TimeoutException(
+                'Location request timed out after 15 seconds',
+              );
+            },
+          );
 
       // Save coordinates
       _latitudeController.text = position.latitude.toString();
@@ -207,20 +214,21 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
 
       // Get address from coordinates using reverse geocoding
       try {
-        List<Placemark> placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            print('⚠️ Geocoding request timed out');
-            return [];
-          },
-        );
+        List<Placemark> placemarks =
+            await placemarkFromCoordinates(
+              position.latitude,
+              position.longitude,
+            ).timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                print('⚠️ Geocoding request timed out');
+                return [];
+              },
+            );
 
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
-          
+
           setState(() {
             // Update address fields with detected location
             if (place.postalCode != null && place.postalCode!.isNotEmpty) {
@@ -229,7 +237,8 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
             if (place.locality != null && place.locality!.isNotEmpty) {
               _cityController.text = place.locality!;
             }
-            if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+            if (place.administrativeArea != null &&
+                place.administrativeArea!.isNotEmpty) {
               _stateController.text = place.administrativeArea!;
             }
             if (place.street != null && place.street!.isNotEmpty) {
@@ -238,17 +247,21 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
             if (place.subLocality != null && place.subLocality!.isNotEmpty) {
               _landmarkController.text = place.subLocality!;
             }
-            
+
             // Build search text
-            _searchController.text = '${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}'.trim();
-            
+            _searchController.text =
+                '${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}'
+                    .trim();
+
             _isLoadingLocation = false;
           });
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Location detected: ${place.locality}, ${place.administrativeArea}'),
+                content: Text(
+                  'Location detected: ${place.locality}, ${place.administrativeArea}',
+                ),
                 backgroundColor: Colors.green,
               ),
             );
@@ -260,7 +273,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}'),
+                content: Text(
+                  'Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+                ),
                 backgroundColor: Colors.green,
               ),
             );
@@ -274,7 +289,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}'),
+              content: Text(
+                'Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -288,7 +305,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Location request timed out. Please manually enter your address.'),
+            content: Text(
+              'Location request timed out. Please manually enter your address.',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -301,7 +320,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Location error: ${e.toString()}. You can manually enter your address.'),
+            content: Text(
+              'Location error: ${e.toString()}. You can manually enter your address.',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -320,7 +341,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       );
       return;
     }
-    
+
     if (_houseNumberController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -330,7 +351,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       );
       return;
     }
-    
+
     if (_cityController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -340,7 +361,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       );
       return;
     }
-    
+
     if (_stateController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -350,7 +371,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       );
       return;
     }
-    
+
     if (_streetController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -360,7 +381,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       );
       return;
     }
-    
+
     if (_landmarkController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -370,7 +391,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       );
       return;
     }
-    
+
     // Validate pincode format (should be numeric)
     if (!RegExp(r'^\d{6}$').hasMatch(_pincodeController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -394,14 +415,10 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         throw Exception('User not logged in');
       }
 
-      final fullAddress = '${_houseNumberController.text}'
-          '${_landmarkController.text.isNotEmpty ? ', ${_landmarkController.text}' : ''}'
-          ', ${_cityController.text}, ${_stateController.text}.';
-
       // Determine the type to send - send the type name directly
       String typeToSend = _selectedType;
       String type2ToSend = '';
-      
+
       // If "Other" is selected, M1_TYPE2 must contain the custom type
       if (_selectedType == 'Other') {
         if (_selectedTypeOther.isEmpty) {
@@ -427,8 +444,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
 
       // Prepare data for API
       // Build full address string for M1_ADD1
-      final fullAddressLine = '${_houseNumberController.text}, ${_streetController.text}';
-      
+      final fullAddressLine =
+          '${_houseNumberController.text}, ${_streetController.text}';
+
       final addressData = {
         'M1_CODE': m1Code,
         'M1_TYPE1': typeToSend,
@@ -437,8 +455,12 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         'M1_ADD2': _cityController.text,
         'M1_ADD3': _stateController.text,
         'M1_ADD4': _pincodeController.text,
-        'M1_ADD5': _latitudeController.text.isNotEmpty ? _latitudeController.text : '0',
-        'M1_ADD6': _longitudeController.text.isNotEmpty ? _longitudeController.text : '0',
+        'M1_ADD5': _latitudeController.text.isNotEmpty
+            ? _latitudeController.text
+            : '0',
+        'M1_ADD6': _longitudeController.text.isNotEmpty
+            ? _longitudeController.text
+            : '0',
         'M1_ADD7': _streetController.text,
         'M1_ADD8': _landmarkController.text,
       };
@@ -478,9 +500,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       }
 
       final response = await dio.post(
-        isEditing 
-          ? 'https://www.onlineaushadhi.in/myadmin/UserApis/update_address'
-          : 'https://www.onlineaushadhi.in/myadmin/UserApis/add_address',
+        isEditing
+            ? 'https://www.onlineaushadhi.in/myadmin/UserApis/update_address'
+            : 'https://www.onlineaushadhi.in/myadmin/UserApis/add_address',
         data: addressData,
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
@@ -502,7 +524,7 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         if (data['response'] == 'success') {
           print('✅ Address saved successfully');
           print('📥 API Response: $data');
-          
+
           // Extract the address ID from the response
           String addressId = '';
           if (isEditing) {
@@ -511,19 +533,22 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
             // Try to get ID from nested data array first
             if (data['data'] is List && (data['data'] as List).isNotEmpty) {
               final firstItem = (data['data'] as List).first;
-              addressId = firstItem['M1_ADD_ID']?.toString() ?? _pincodeController.text;
+              addressId =
+                  firstItem['M1_ADD_ID']?.toString() ?? _pincodeController.text;
               print('📍 Got address ID from nested data: $addressId');
             } else {
               // Fallback to top-level M1_ADD_ID
-              addressId = data['M1_ADD_ID']?.toString() ?? _pincodeController.text;
+              addressId =
+                  data['M1_ADD_ID']?.toString() ?? _pincodeController.text;
               print('📍 Got address ID from top level: $addressId');
             }
           }
-          
+
           final address = Address(
             id: addressId,
             type: typeToSend,
-            fullAddress: '${_houseNumberController.text}${_landmarkController.text.isNotEmpty ? ', ${_landmarkController.text}' : ''}, ${_cityController.text}, ${_stateController.text} - ${_pincodeController.text}',
+            fullAddress:
+                '${_houseNumberController.text}${_landmarkController.text.isNotEmpty ? ', ${_landmarkController.text}' : ''}, ${_cityController.text}, ${_stateController.text} - ${_pincodeController.text}',
             pincode: _pincodeController.text,
             houseNumber: _houseNumberController.text,
             landmark: _landmarkController.text,
@@ -536,19 +561,23 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
 
           print('📍 Address object created with ID: ${address.id}');
           print('📍 Address type: ${address.type}');
-          
+
           // Add delay to ensure backend has processed the address
           await Future.delayed(const Duration(milliseconds: 1000));
-          
+
           widget.onSave(address);
-          
+
           if (mounted) {
             // Add another small delay to ensure the list is refreshed before popping
             await Future.delayed(const Duration(milliseconds: 500));
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(isEditing ? 'Address updated successfully' : 'Address saved successfully'),
+                content: Text(
+                  isEditing
+                      ? 'Address updated successfully'
+                      : 'Address saved successfully',
+                ),
                 backgroundColor: Colors.green,
               ),
             );
@@ -557,7 +586,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
           throw Exception(data['message'] ?? 'Failed to save address');
         }
       } else {
-        throw Exception('Server error: ${response.statusCode} - ${response.statusMessage}');
+        throw Exception(
+          'Server error: ${response.statusCode} - ${response.statusMessage}',
+        );
       }
     } catch (e) {
       setState(() {
@@ -587,7 +618,11 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
         ),
         title: Text(
           widget.address != null ? 'Edit Address' : 'Add Address',
-          style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       body: SingleChildScrollView(
@@ -601,7 +636,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                 child: Padding(
                   padding: EdgeInsets.all(20),
                   child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF1976D2),
+                    ),
                   ),
                 ),
               )
@@ -616,13 +653,15 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                   } else if (type.name.toLowerCase() == 'other') {
                     icon = Icons.location_on;
                   }
-                  
+
                   return InkWell(
                     onTap: () {
                       setState(() {
                         _selectedType = type.name;
                         _selectedTypeId = type.type;
-                        print('📍 Selected type: $_selectedType (ID: $_selectedTypeId)');
+                        print(
+                          '📍 Selected type: $_selectedType (ID: $_selectedTypeId)',
+                        );
                       });
                     },
                     child: Row(
@@ -635,7 +674,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                             setState(() {
                               _selectedType = value!;
                               _selectedTypeId = type.type;
-                              print('📍 Selected type via radio: $_selectedType (ID: $_selectedTypeId)');
+                              print(
+                                '📍 Selected type via radio: $_selectedType (ID: $_selectedTypeId)',
+                              );
                             });
                           },
                           activeColor: const Color(0xFF1976D2),
@@ -683,7 +724,10 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF1976D2), width: 2),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF1976D2),
+                          width: 2,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -712,7 +756,10 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF1976D2), width: 2),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF1976D2),
+                    width: 2,
+                  ),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -729,14 +776,18 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                 children: [
                   Icon(
                     Icons.my_location,
-                    color: _isLoadingLocation ? Colors.grey : const Color(0xFF1976D2),
+                    color: _isLoadingLocation
+                        ? Colors.grey
+                        : const Color(0xFF1976D2),
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   Text(
                     'Use current location',
                     style: TextStyle(
-                      color: _isLoadingLocation ? Colors.grey : const Color(0xFF1976D2),
+                      color: _isLoadingLocation
+                          ? Colors.grey
+                          : const Color(0xFF1976D2),
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
@@ -748,7 +799,9 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFF1976D2),
+                        ),
                       ),
                     ),
                   ],
@@ -909,11 +962,15 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : Text(
-                        widget.address != null ? 'UPDATE ADDRESS' : 'SAVE ADDRESS',
+                        widget.address != null
+                            ? 'UPDATE ADDRESS'
+                            : 'SAVE ADDRESS',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -928,18 +985,13 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
       ),
     );
   }
-
 }
-
 
 class AddressType {
   final String type;
   final String name;
 
-  AddressType({
-    required this.type,
-    required this.name,
-  });
+  AddressType({required this.type, required this.name});
 
   factory AddressType.fromJson(Map<String, dynamic> json) {
     return AddressType(

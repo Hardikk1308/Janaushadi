@@ -9,6 +9,14 @@ class MainApp extends StatefulWidget {
 
   @override
   State<MainApp> createState() => _MainAppState();
+
+  // Static method to change tab from anywhere in the app
+  static void changeTab(BuildContext context, int tabIndex) {
+    final state = context.findAncestorStateOfType<_MainAppState>();
+    if (state != null) {
+      state._changeTab(tabIndex);
+    }
+  }
 }
 
 class _MainAppState extends State<MainApp> {
@@ -21,6 +29,16 @@ class _MainAppState extends State<MainApp> {
     super.initState();
     _pages = [const HomeScreen(), const OrdersPage(), const ProfilePage()];
     _loadSelectedTab();
+  }
+
+  // Method to change tab
+  void _changeTab(int index) {
+    if (index >= 0 && index < _pages.length) {
+      setState(() {
+        _currentIndex = index;
+      });
+      _saveSelectedTab(index);
+    }
   }
 
   Future<void> _loadSelectedTab() async {

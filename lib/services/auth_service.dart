@@ -109,4 +109,17 @@ class AuthService {
     await _storage.delete(key: AppConstants.keyCustomApiUrl);
     print('Custom API URL cleared');
   }
+
+  static Future<String?> getM1Pacc() async {
+    try {
+      final userData = await _storage.read(key: AppConstants.keyUserData);
+      if (userData != null) {
+        final userDataMap = jsonDecode(userData);
+        return userDataMap['M1_PACC']?.toString() ?? '';
+      }
+    } catch (e) {
+      print('Error getting M1_PACC: $e');
+    }
+    return null;
+  }
 }

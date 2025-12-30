@@ -3,6 +3,8 @@ import 'package:jan_aushadi/screens/MainApp.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
 import 'package:jan_aushadi/screens/auth/phone_login_screen.dart';
 import 'package:jan_aushadi/services/auth_service.dart';
+import 'package:jan_aushadi/services/fcm_service.dart';
+import 'package:jan_aushadi/services/firebase_messaging_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -31,6 +33,19 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkLoginStatus() async {
+    // Initialize Firebase Messaging (optional)
+    try {
+      final firebaseMessagingService = FirebaseMessagingService();
+      await firebaseMessagingService.initializeMessaging();
+    } catch (e) {
+      print('⚠️ Firebase Messaging initialization failed: $e');
+      print('ℹ️ App will continue without Firebase');
+    }
+
+    // Initialize FCM
+    final fcmService = FCMService();
+    await fcmService.initializeFCM();
+
     final isLoggedIn = await AuthService.isLoggedIn();
     if (mounted) {
       Navigator.of(context).pushReplacement(
