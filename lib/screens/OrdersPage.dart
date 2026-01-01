@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:jan_aushadi/services/auth_service.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
 import 'package:jan_aushadi/screens/order_tracking_screen.dart';
+import 'package:jan_aushadi/screens/product_details_screen.dart';
 import 'dart:convert';
 
 class OrdersPage extends StatefulWidget {
@@ -14,7 +15,7 @@ class OrdersPage extends StatefulWidget {
 
 class _OrdersPageState extends State<OrdersPage>
     with SingleTickerProviderStateMixin {
-  int _selectedTab = 0; // 0: Placed, 1: Delivered, 2: Cancelled
+  int _selectedTab = 0; // 0: All Orders, 1: Placed, 2: Delivered
   late TabController _tabController;
   bool _isLoading = true;
   String customerName = 'Customer';
@@ -263,6 +264,20 @@ class _OrdersPageState extends State<OrdersPage>
   }
 
   void _trackOrder(Order order) {
+    // For cancelled orders, show details screen instead of tracking
+    if (order.status.toLowerCase() == 'cancelled') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OrderDetailsScreen(order: order),
+        ),
+      ).then((_) {
+        // Refresh orders when returning from details screen
+        _fetchOrders();
+      });
+      return;
+    }
+
     // Convert orderItems to the format expected by tracking screen
     List<Map<String, dynamic>> itemsData = order.orderItems.map((item) {
       return {
@@ -273,6 +288,7 @@ class _OrdersPageState extends State<OrdersPage>
         'F4_AMT3': item.totalMrp.toString(),
         'F4_AMT4': item.totalSale.toString(),
         'F4_F1': item.productId,
+        'image': item.imageUrl,
       };
     }).toList();
 
@@ -418,6 +434,8 @@ class _OrdersPageState extends State<OrdersPage>
                 duration: Duration(seconds: 2),
               ),
             );
+            // Add a small delay to ensure backend updates the status
+            await Future.delayed(const Duration(milliseconds: 500));
             // Refresh orders
             _fetchOrders();
           }
@@ -623,10 +641,10 @@ class _OrdersPageState extends State<OrdersPage>
                 // Tab Bar
                 Container(
                   margin: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 12,
+                    horizontal: 2,
+                    vertical: 14,
                   ),
-                  padding: const EdgeInsets.all(2),
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
@@ -635,23 +653,23 @@ class _OrdersPageState extends State<OrdersPage>
                     children: [
                       Expanded(
                         child: _buildTabButton(
-                          'Placed',
+                          'All Orders',
                           0,
+                          placedOrders.length + deliveredOrders.length,
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildTabButton(
+                          'Placed',
+                          1,
                           placedOrders.length,
                         ),
                       ),
                       Expanded(
                         child: _buildTabButton(
                           'Delivered',
-                          1,
-                          deliveredOrders.length,
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildTabButton(
-                          'Cancelled',
                           2,
-                          cancelledOrders.length,
+                          deliveredOrders.length,
                         ),
                       ),
                     ],
@@ -665,14 +683,14 @@ class _OrdersPageState extends State<OrdersPage>
                     child: TabBarView(
                       controller: _tabController,
                       children: [
+                        _buildOrdersList([
+                          ...placedOrders,
+                          ...deliveredOrders,
+                        ], 'No orders'),
                         _buildOrdersList(placedOrders, 'No placed orders'),
                         _buildOrdersList(
                           deliveredOrders,
                           'No delivered orders',
-                        ),
-                        _buildOrdersList(
-                          cancelledOrders,
-                          'No cancelled orders',
                         ),
                       ],
                     ),
@@ -795,7 +813,7 @@ class _OrdersPageState extends State<OrdersPage>
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -813,7 +831,7 @@ class _OrdersPageState extends State<OrdersPage>
           child: Text(
             count > 0 ? '$title ($count)' : title,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               color: isSelected ? const Color(0xFF1976D2) : Colors.grey[600],
             ),
@@ -1157,6 +1175,7 @@ class OrderItem {
   final double salePrice;
   final double totalMrp;
   final double totalSale;
+  final String? imageUrl;
 
   OrderItem({
     required this.productId,
@@ -1166,6 +1185,7 @@ class OrderItem {
     required this.salePrice,
     required this.totalMrp,
     required this.totalSale,
+    this.imageUrl,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -1177,6 +1197,7 @@ class OrderItem {
       salePrice: double.tryParse(json['F4_AMT2']?.toString() ?? '0') ?? 0.0,
       totalMrp: double.tryParse(json['F4_AMT3']?.toString() ?? '0') ?? 0.0,
       totalSale: double.tryParse(json['F4_AMT4']?.toString() ?? '0') ?? 0.0,
+      imageUrl: json['image']?.toString(),
     );
   }
 }
@@ -1542,10 +1563,42 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.medical_information,
-              color: Colors.grey[400],
-              size: 30,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                  ? Image.network(
+                      item.imageUrl!,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[100],
+                          child: Icon(
+                            Icons.medication_outlined,
+                            color: Colors.grey[400],
+                            size: 30,
+                          ),
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                : null,
+                            strokeWidth: 2,
+                          ),
+                        );
+                      },
+                    )
+                  : Icon(
+                      Icons.medication_outlined,
+                      color: Colors.grey[400],
+                      size: 30,
+                    ),
             ),
           ),
           const SizedBox(width: 12),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/models/Product_model.dart' as product_model;
+import 'package:jan_aushadi/models/coupon_model.dart';
 import 'package:jan_aushadi/screens/manage_addresses_screen.dart';
 import 'package:jan_aushadi/screens/your_details_screen.dart';
 import 'package:jan_aushadi/screens/payment_options_screen.dart';
@@ -43,12 +44,18 @@ class _CartScreenState extends State<CartScreen> {
   bool _isPlacingOrder = false; // Guard against multiple order placements
 
   static const String _checkoutAddressKey = 'checkout_selected_address';
+  static const String _appliedCouponKey = 'applied_coupon_code';
+  static const String _couponDiscountKey = 'applied_coupon_discount';
+
+  // Coupon state
+  Coupon? _appliedCoupon;
+  double _couponDiscount = 0.0;
 
   // Bill details
   double get _totalMrpPrice => _calculateTotalMrp();
   double get _totalSalePrice => _calculateTotal();
   double get _savings => _totalMrpPrice - _totalSalePrice;
-  double get _total => _totalSalePrice;
+  double get _total => _totalSalePrice - _couponDiscount;
 
   // New method to show payment method selection
 
@@ -59,6 +66,33 @@ class _CartScreenState extends State<CartScreen> {
     _initializeRazorpay();
     _loadCartFromSharedPreferences();
     _loadSelectedAddress();
+    _loadAppliedCoupon();
+  }
+
+  Future<void> _loadAppliedCoupon() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final couponCode = prefs.getString(_appliedCouponKey);
+      final discount = prefs.getDouble(_couponDiscountKey) ?? 0.0;
+
+      if (couponCode != null && couponCode.isNotEmpty) {
+        setState(() {
+          _appliedCoupon = Coupon(
+            code: couponCode,
+            name: couponCode,
+            discountType: 'Flat',
+            amount: discount.toString(),
+            minAmount: '0',
+            expiryDate: '',
+            description: 'Applied Coupon',
+          );
+          _couponDiscount = discount;
+        });
+        print('✅ Loaded coupon from storage: $couponCode - ₹$discount');
+      }
+    } catch (e) {
+      print('❌ Error loading coupon: $e');
+    }
   }
 
   Future<void> _loadSelectedAddress() async {
@@ -264,6 +298,64 @@ class _CartScreenState extends State<CartScreen> {
         ],
       ),
     );
+  }
+
+  void _applyCoupon(Coupon coupon) {
+    setState(() {
+      _appliedCoupon = coupon;
+      _couponDiscount = double.tryParse(coupon.amount) ?? 0.0;
+    });
+
+    _saveCouponToPreferences(coupon);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Coupon ${coupon.code} applied! Discount: ₹${_couponDiscount.toStringAsFixed(2)}',
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _removeCoupon() {
+    setState(() {
+      _appliedCoupon = null;
+      _couponDiscount = 0.0;
+    });
+
+    _clearCouponFromPreferences();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Coupon removed'),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _saveCouponToPreferences(Coupon coupon) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_appliedCouponKey, coupon.code);
+      await prefs.setDouble(_couponDiscountKey, _couponDiscount);
+      print('✅ Coupon saved: ${coupon.code} - ₹$_couponDiscount');
+    } catch (e) {
+      print('❌ Error saving coupon: $e');
+    }
+  }
+
+  Future<void> _clearCouponFromPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_appliedCouponKey);
+      await prefs.remove(_couponDiscountKey);
+      print('✅ Coupon cleared from preferences');
+    } catch (e) {
+      print('❌ Error clearing coupon: $e');
+    }
   }
 
   Future<void> _navigateToPaymentOptions() async {
@@ -846,7 +938,7 @@ class _CartScreenState extends State<CartScreen> {
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             child: Padding(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(10),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -937,7 +1029,7 @@ class _CartScreenState extends State<CartScreen> {
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 4),
+                                        // const SizedBox(height: 4),
                                         Text(
                                           product.brand,
                                           style: TextStyle(
@@ -945,7 +1037,7 @@ class _CartScreenState extends State<CartScreen> {
                                             color: Colors.grey[600],
                                           ),
                                         ),
-                                        const SizedBox(height: 8),
+                                        // const SizedBox(height: 4),
                                         Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
@@ -1174,6 +1266,13 @@ class _CartScreenState extends State<CartScreen> {
                                       'Total Sale Price',
                                       '₹${_totalSalePrice.toStringAsFixed(2)}',
                                     ),
+                                    if (_couponDiscount > 0) ...[
+                                      const SizedBox(height: 8),
+                                      _buildBillRow(
+                                        'Coupon Discount',
+                                        '-₹${_couponDiscount.toStringAsFixed(2)}',
+                                      ),
+                                    ],
                                     const Divider(height: 24, thickness: 1),
                                     _buildBillRow(
                                       'Total',
@@ -1189,6 +1288,49 @@ class _CartScreenState extends State<CartScreen> {
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
+                                    if (_appliedCoupon != null) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green[50],
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.green[200]!,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.local_offer,
+                                              color: Colors.green[700],
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Coupon ${_appliedCoupon!.code} applied',
+                                                style: TextStyle(
+                                                  color: Colors.green[700],
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                            GestureDetector(
+                                              onTap: _removeCoupon,
+                                              child: Icon(
+                                                Icons.close,
+                                                color: Colors.green[700],
+                                                size: 16,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -1221,7 +1363,7 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '₹$totalPrice',
+                              '₹${_total.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

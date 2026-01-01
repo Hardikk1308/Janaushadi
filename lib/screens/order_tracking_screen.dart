@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:jan_aushadi/services/order_service.dart';
 import 'package:jan_aushadi/services/cart_service.dart';
 import 'package:jan_aushadi/services/auth_service.dart';
@@ -8,6 +9,99 @@ import 'package:jan_aushadi/screens/product_details_screen.dart' hide Product;
 import 'package:jan_aushadi/models/Product_model.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
+
+class _ImageLoaderWidget extends StatefulWidget {
+  final List<String> imageUrlVariants;
+  final BoxFit fit;
+
+  const _ImageLoaderWidget({
+    required this.imageUrlVariants,
+    required this.fit,
+  });
+
+  @override
+  State<_ImageLoaderWidget> createState() => _ImageLoaderWidgetState();
+}
+
+class _ImageLoaderWidgetState extends State<_ImageLoaderWidget> {
+  int _currentUrlIndex = 0;
+  bool _hasError = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError || _currentUrlIndex >= widget.imageUrlVariants.length) {
+      return Container(
+        color: Colors.grey[100],
+        child: Icon(
+          Icons.medication_outlined,
+          color: Colors.grey[400],
+          size: 30,
+        ),
+      );
+    }
+
+    final currentUrl = widget.imageUrlVariants[_currentUrlIndex];
+    print('🖼️ Loading image: $currentUrl');
+
+    return Image.network(
+      currentUrl,
+      fit: widget.fit,
+      errorBuilder: (context, error, stackTrace) {
+        print('❌ Failed to load image: $currentUrl');
+        print('   Error: $error');
+        
+        // Try next URL variant
+        if (_currentUrlIndex < widget.imageUrlVariants.length - 1) {
+          _currentUrlIndex++;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+          return Image.network(
+            widget.imageUrlVariants[_currentUrlIndex],
+            fit: widget.fit,
+            errorBuilder: (context, error, stackTrace) {
+              setState(() => _hasError = true);
+              return Container(
+                color: Colors.grey[100],
+                child: Icon(
+                  Icons.medication_outlined,
+                  color: Colors.grey[400],
+                  size: 30,
+                ),
+              );
+            },
+          );
+        }
+        
+        setState(() => _hasError = true);
+        return Container(
+          color: Colors.grey[100],
+          child: Icon(
+            Icons.medication_outlined,
+            color: Colors.grey[400],
+            size: 30,
+          ),
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          print('✅ Image loaded successfully: $currentUrl');
+          return child;
+        }
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                : null,
+            strokeWidth: 2,
+            color: AppConstants.primaryColor,
+          ),
+        );
+      },
+    );
+  }
+}
 
 class OrderTrackingScreen extends StatefulWidget {
   final String orderId;
@@ -45,7 +139,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
   String paymentMode = '';
   bool _isLoadingTrackingData = false;
   bool _isLoadingAddress = false;
-  
+
   // Vendor and Rider information
   String vendorName = '';
   String vendorBusinessName = '';
@@ -60,7 +154,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     _initializeOrder();
 
     _currentTrackingData = widget.trackingData;
-    
+
     // Extract details from initial tracking data if available
     if (_currentTrackingData != null) {
       _extractTrackingDetails();
@@ -74,7 +168,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
     // Fetch tracking data to get all details
     _refreshTrackingData();
-    
+
     // Set up periodic refresh of tracking data every 30 seconds
     Future.delayed(const Duration(seconds: 30), _setupPeriodicRefresh);
   }
@@ -176,10 +270,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         // Load address if not already set
         if (deliveryAddress.isEmpty) {
           // First, try to get address from the address array (saved addresses)
-          if (userDataMap['address'] is List && (userDataMap['address'] as List).isNotEmpty) {
+          if (userDataMap['address'] is List &&
+              (userDataMap['address'] as List).isNotEmpty) {
             print('📍 Found address array in user data');
             final addressArray = userDataMap['address'] as List;
-            
+
             // Get the first active address, or the first address if none are active
             Map<String, dynamic>? selectedAddress;
             for (var addr in addressArray) {
@@ -188,15 +283,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                 break;
               }
             }
-            
+
             // If no active address found, use the first one
             selectedAddress ??= addressArray.first;
-            
+
             if (selectedAddress != null) {
               final add1 = selectedAddress['M1_ADD1']?.toString() ?? '';
               if (add1.isNotEmpty) {
                 deliveryAddress = add1;
-                print('📍 Extracted address from address array: $deliveryAddress');
+                print(
+                  '📍 Extracted address from address array: $deliveryAddress',
+                );
               }
             }
           } else {
@@ -612,10 +709,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
         if (trackingData != null && mounted) {
           print('✅ Tracking data received successfully');
-          
+
           // Animate the status update
           await _animateStatusUpdate(trackingData);
-          
+
           setState(() {
             _currentTrackingData = trackingData;
             _extractTrackingDetails();
@@ -647,18 +744,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
       final orderInfo = data[0];
       final newStatus = orderInfo['F4_BT']?.toString() ?? 'Placed';
-      
-      print('📊 Current status: ${orderData['currentStatus']}, New status: $newStatus');
-      
+
+      print(
+        '📊 Current status: ${orderData['currentStatus']}, New status: $newStatus',
+      );
+
       // Only animate if status has changed
       if (newStatus != orderData['currentStatus']) {
         print('🎬 Status changed! Animating update...');
-        
+
         // Play pulse animation
         _pulseController.forward();
         await Future.delayed(const Duration(milliseconds: 500));
         _pulseController.reverse();
-        
+
         // Update status with animation
         if (mounted) {
           setState(() {
@@ -666,7 +765,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
             _updateStatusIndex(newStatus);
           });
         }
-        
+
         // Show success snackbar with animation
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -717,7 +816,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
       'Delivery': 2,
       'Delivered': 3,
     };
-    
+
     orderData['statusIndex'] = statusMap[status] ?? 0;
   }
 
@@ -807,6 +906,24 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     print('   Rider Name: $riderName');
     print('   Rider Phone: $riderPhone');
 
+    // Debug: Check if vendor fields exist in response
+    if (vendorName.isEmpty) {
+      print('⚠️ Vendor name is empty. Checking available keys:');
+      print('   All keys in orderInfo: ${orderInfo.keys.toList()}');
+      print('   Looking for VEN_* keys:');
+      orderInfo.forEach((key, value) {
+        if (key.toString().contains('VEN') || key.toString().contains('ven')) {
+          print('      Found: $key = $value');
+        }
+      });
+
+      // If vendor details not in order_details, fetch from order_list
+      print(
+        '🔄 Vendor details not found in order_details, fetching from order_list...',
+      );
+      _fetchVendorDetailsFromOrderList();
+    }
+
     // If we have an address ID, fetch the full address
     if (addressId != null) {
       print('🔄 Calling _fetchAddressById with ID: $addressId');
@@ -848,6 +965,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         print('   - $itemName: Qty $qty');
       }
       print('✅ Total items calculated: $totalItemsCount');
+      
+      // Fetch product images for items that don't have them
+      _fetchProductImages(products);
     } else {
       print('⚠️ No items/products array found in order info');
       totalItemsCount = 0;
@@ -866,30 +986,187 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
   void _updateTimelineBasedOnStatus(String status) {
     print('🔄 Updating timeline based on status: $status');
-    
+
     final statusLower = status.toLowerCase();
-    
+
     // Reset all timeline items
     for (var item in orderData['timeline']) {
       item['completed'] = false;
     }
-    
+
     // Mark completed items based on status
-    if (statusLower == 'placed' || statusLower == 'dispatch' || statusLower == 'delivery' || statusLower == 'delivered') {
+    if (statusLower == 'placed' ||
+        statusLower == 'dispatch' ||
+        statusLower == 'delivery' ||
+        statusLower == 'delivered') {
       orderData['timeline'][0]['completed'] = true; // Order placed
     }
-    
-    if (statusLower == 'dispatch' || statusLower == 'delivery' || statusLower == 'delivered') {
+
+    if (statusLower == 'dispatch' ||
+        statusLower == 'delivery' ||
+        statusLower == 'delivered') {
       orderData['timeline'][1]['completed'] = true; // Dispatch
     }
-    
+
     if (statusLower == 'delivery' || statusLower == 'delivered') {
       orderData['timeline'][2]['completed'] = true; // Delivery
       // Update the delivery message for delivered orders
       orderData['timeline'][2]['message'] = 'Order delivered successfully';
     }
-    
+
     print('✅ Timeline updated');
+  }
+
+  Future<void> _fetchProductImages(List<dynamic> products) async {
+    try {
+      print('🖼️ Fetching product images for ${products.length} items...');
+      
+      for (var product in products) {
+        // Check if product already has image data
+        if (product['image'] != null && product['image'].toString().isNotEmpty) {
+          print('   ✅ Product already has image: ${product['M1_NAME']}');
+          continue;
+        }
+        
+        // Get product ID
+        final productId = product['F4_F1']?.toString() ?? product['product_id']?.toString() ?? '';
+        if (productId.isEmpty) {
+          print('   ⚠️ No product ID found for: ${product['M1_NAME']}');
+          continue;
+        }
+        
+        print('   🔍 Fetching image for product ID: $productId');
+        
+        try {
+          final dio = Dio();
+          final response = await dio.post(
+            'https://www.onlineaushadhi.in/myadmin/UserApis/get_all_product',
+            data: {'cat_id': '', 'subcat_id': ''},
+            options: Options(
+              contentType: Headers.formUrlEncodedContentType,
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Jan-Aushadhi-App/1.0',
+              },
+            ),
+          ).timeout(const Duration(seconds: 10));
+
+          if (response.statusCode == 200 && response.data != null) {
+            var productData = response.data;
+            if (productData is String) {
+              productData = jsonDecode(productData);
+            }
+
+            if (productData is Map && productData['response'] == 'success') {
+              final data = productData['data'] as List?;
+              if (data != null) {
+                // Find product with matching ID
+                for (var item in data) {
+                  if (item['product_id']?.toString() == productId) {
+                    // Extract image from product
+                    if (item['image'] != null && item['image'] is Map) {
+                      final imageData = item['image'] as Map<String, dynamic>;
+                      final imageName =
+                          imageData['M1_DC1']?.toString() ??
+                          imageData['M1_DC2']?.toString() ??
+                          imageData['M1_DC3']?.toString() ??
+                          imageData['M1_DC4']?.toString();
+                      
+                      if (imageName != null && imageName.isNotEmpty) {
+                        product['image'] = imageName;
+                        print('   ✅ Image found for ${product['M1_NAME']}: $imageName');
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          print('   ⚠️ Error fetching image for product $productId: $e');
+        }
+      }
+      
+      // Trigger UI update
+      if (mounted) {
+        setState(() {});
+      }
+      
+      print('✅ Product images fetch completed');
+    } catch (e) {
+      print('❌ Error in _fetchProductImages: $e');
+    }
+  }
+
+  Future<void> _fetchVendorDetailsFromOrderList() async {
+    try {
+      final m1Code = await AuthService.getM1Code();
+      if (m1Code == null || m1Code.isEmpty) {
+        print('❌ No M1_CODE available for fetching vendor details');
+        return;
+      }
+
+      print('🔄 Fetching vendor details from order_list API...');
+
+      final dio = Dio();
+      final response = await dio.post(
+        'https://www.onlineaushadhi.in/myadmin/UserApis/order_list',
+        data: {'M1_CODE': m1Code},
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Jan-Aushadhi-App/1.0',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        var orderListData = response.data;
+
+        if (orderListData is String) {
+          orderListData = jsonDecode(orderListData);
+        }
+
+        if (orderListData is Map && orderListData['response'] == 'success') {
+          final orders = orderListData['data'] as List?;
+
+          if (orders != null && orders.isNotEmpty) {
+            // Find the order matching our order ID
+            for (var order in orders) {
+              if (order['F4_NO']?.toString() == widget.orderId) {
+                print('✅ Found matching order in order_list');
+
+                // Extract vendor details
+                final newVendorName = order['VEN_NAME']?.toString() ?? '';
+                final newVendorBusiness = order['VEN_BNAME']?.toString() ?? '';
+                final newVendorPhone = order['VEN_TEL1']?.toString() ?? '';
+
+                print('📦 Vendor details from order_list:');
+                print('   Name: $newVendorName');
+                print('   Business: $newVendorBusiness');
+                print('   Phone: $newVendorPhone');
+
+                if (newVendorName.isNotEmpty) {
+                  if (mounted) {
+                    setState(() {
+                      vendorName = newVendorName;
+                      vendorBusinessName = newVendorBusiness;
+                      vendorPhone = newVendorPhone;
+                    });
+                  }
+                  print('✅ Vendor details updated successfully');
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Error fetching vendor details from order_list: $e');
+    }
   }
 
   Future<Map<String, dynamic>?> _trackOrder({
@@ -968,7 +1245,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
             try {
               // Parse the date format from API (assuming format: 2025-12-06 01:05:00)
               final dateTime = DateTime.parse(dateStr.replaceAll(' ', 'T'));
-              return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+              return _formatDateTo12Hour(dateTime);
             } catch (e) {
               return dateStr; // Return as-is if parsing fails
             }
@@ -978,8 +1255,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     }
 
     // Fallback to current date
-    final now = DateTime.now();
-    return '${now.day}/${now.month}/${now.year} at ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return _formatDateTo12Hour(DateTime.now());
+  }
+
+  String _formatDateTo12Hour(DateTime dateTime) {
+    final hour12 = dateTime.hour > 12
+        ? dateTime.hour - 12
+        : (dateTime.hour == 0 ? 12 : dateTime.hour);
+    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${hour12.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
   }
 
   @override
@@ -1151,6 +1435,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
               const SizedBox(height: 20),
 
+              // Vendor Details Section - Show above ordered products
+              _buildVendorDetails(),
+
+              const SizedBox(height: 20),
+
               // Ordered Products Section - Show prominently at the top
               _buildOrderedProducts(),
 
@@ -1246,6 +1535,241 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildVendorDetails() {
+    // Show loading state if data is still loading
+    if (_isLoadingTrackingData) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 12,
+                    width: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 16,
+                    width: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show vendor details if available
+    if (vendorName.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.store_outlined,
+                color: Colors.grey[400],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Vendor',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Vendor details not available',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Vendor Icon
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppConstants.primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.store_outlined,
+              color: AppConstants.primaryColor,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Vendor Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vendor',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  vendorName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                if (vendorBusinessName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    vendorBusinessName,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Call Button
+          if (vendorPhone.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _makePhoneCall(vendorPhone);
+              },
+              child: Container(
+                width: 33,
+                height: 33,
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Icon(
+                  Icons.call_outlined,
+                  color: Colors.green[700],
+                  size: 20,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    try {
+      final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+      if (await canLaunchUrl(launchUri)) {
+        await launchUrl(launchUri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not launch phone call'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error making phone call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildOrderedProducts() {
@@ -1415,188 +1939,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
 
     return Column(
       children: [
-        // Vendor and Rider Information Card
-        if (vendorName.isNotEmpty || riderName.isNotEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Vendor Information
-                if (vendorName.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.store_outlined,
-                        color: AppConstants.primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Vendor',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              vendorName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            if (vendorBusinessName.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                vendorBusinessName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                            if (vendorPhone.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              GestureDetector(
-                                onTap: () {
-                                  // Copy phone to clipboard
-                                  Clipboard.setData(
-                                    ClipboardData(text: vendorPhone),
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Phone copied to clipboard'),
-                                      duration: Duration(seconds: 1),
-                                    ),
-                                  );
-                                },
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.phone_outlined,
-                                      size: 14,
-                                      color: AppConstants.primaryColor,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      vendorPhone,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppConstants.primaryColor,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (riderName.isNotEmpty) const SizedBox(height: 16),
-                ],
-
-                // Rider Information
-                if (riderName.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.two_wheeler_outlined,
-                        color: Colors.orange,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Delivery Partner',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              riderName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            if (riderPhone.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              GestureDetector(
-                                onTap: () {
-                                  // Copy phone to clipboard
-                                  Clipboard.setData(
-                                    ClipboardData(text: riderPhone),
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Phone copied to clipboard'),
-                                      duration: Duration(seconds: 1),
-                                    ),
-                                  );
-                                },
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.phone_outlined,
-                                      size: 14,
-                                      color: Colors.orange,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      riderPhone,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-
         // Products List Card
         Container(
           width: double.infinity,
@@ -1665,6 +2007,25 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     );
   }
 
+  Widget _buildProductImage(String imageUrl) {
+    // Extract filename from URL
+    String filename = imageUrl.split('/').last;
+    
+    // List of image URL patterns to try
+    final imageUrls = [
+      'https://webdevelopercg.com/janaushadhi/myadmin/uploads/product/$filename',
+      'https://webdevelopercg.com/janaushadhi/uploads/product/$filename',
+      'https://webdevelopercg.com/janaushadhi/uploads/product_images/$filename',
+      'https://www.onlineaushadhi.in/myadmin/uploads/product/$filename',
+      'https://webdevelopercg.com/janaushadhi/public/uploads/product/$filename',
+    ];
+
+    return _ImageLoaderWidget(
+      imageUrlVariants: imageUrls,
+      fit: BoxFit.cover,
+    );
+  }
+
   Widget _buildProductItem(Map<String, dynamic> product) {
     print('📦 Raw product data: $product');
 
@@ -1702,9 +2063,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         ) ??
         1;
 
-    // F4_MRP = MRP from order_details
-    // F4_AMT1 = MRP from items array
-    // F5_MRP = MRP from enhanced tracking
     final mrp =
         double.tryParse(
           product['F4_MRP']?.toString() ??
@@ -1718,34 +2076,50 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
         ? ((mrp - price) / mrp * 100).round()
         : 0;
 
-    // Extract image URL from the image object
+    // Extract image URL from the image object or string
     String? imageUrl;
     print('🖼️ Checking for image in product data...');
     print('   Has image key: ${product.containsKey('image')}');
     print('   Image value: ${product['image']}');
     print('   Image type: ${product['image']?.runtimeType}');
 
-    if (product['image'] != null && product['image'] is Map) {
-      final imageData = product['image'] as Map<String, dynamic>;
-      print('   Image data keys: ${imageData.keys.toList()}');
+    if (product['image'] != null) {
+      if (product['image'] is String) {
+        // Image is already a URL string
+        final imageString = product['image'].toString();
+        if (imageString.isNotEmpty && imageString.startsWith('http')) {
+          imageUrl = imageString;
+          print('   ✅ Image URL (from string): $imageUrl');
+        } else if (imageString.isNotEmpty) {
+          // It's a filename, construct the URL
+          imageUrl = 'https://webdevelopercg.com/janaushadhi/myadmin/uploads/product/$imageString';
+          print('   ✅ Image URL (constructed from filename): $imageUrl');
+        }
+      } else if (product['image'] is Map) {
+        // Image is a Map object with image data
+        final imageData = product['image'] as Map<String, dynamic>;
+        print('   Image data keys: ${imageData.keys.toList()}');
 
-      final imageName =
-          imageData['M1_DC1']?.toString() ??
-          imageData['M1_DC2']?.toString() ??
-          imageData['M1_DC3']?.toString() ??
-          imageData['M1_DC4']?.toString();
+        final imageName =
+            imageData['M1_DC1']?.toString() ??
+            imageData['M1_DC2']?.toString() ??
+            imageData['M1_DC3']?.toString() ??
+            imageData['M1_DC4']?.toString();
 
-      print('   Extracted image name: $imageName');
+        print('   Extracted image name: $imageName');
 
-      if (imageName != null && imageName.isNotEmpty) {
-        imageUrl =
-            '${AppConstants.baseImageUrl}/$imageName';
-        print('   ✅ Image URL: $imageUrl');
+        if (imageName != null && imageName.isNotEmpty) {
+          // Try multiple image URL patterns
+          imageUrl = 'https://webdevelopercg.com/janaushadhi/myadmin/uploads/product/$imageName';
+          print('   ✅ Image URL: $imageUrl');
+        } else {
+          print('   ⚠️ No valid image name found');
+        }
       } else {
-        print('   ⚠️ No valid image name found');
+        print('   ⚠️ Image is not a string or map: ${product['image']?.runtimeType}');
       }
     } else {
-      print('   ⚠️ No image object found or wrong type');
+      print('   ⚠️ No image object found');
     }
 
     // Extract product ID for navigation
@@ -1792,40 +2166,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: imageUrl != null
-                    ? Image.network(
-                        imageUrl,
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          print('❌ Failed to load image: $imageUrl');
-                          print('   Error: $error');
-                          return Container(
-                            color: Colors.grey[100],
-                            child: Icon(
-                              Icons.medication_outlined,
-                              color: Colors.grey[400],
-                              size: 30,
-                            ),
-                          );
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) {
-                            print('✅ Image loaded successfully: $imageUrl');
-                            return child;
-                          }
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                  : null,
-                              strokeWidth: 2,
-                              color: AppConstants.primaryColor,
-                            ),
-                          );
-                        },
-                      )
+                    ? _buildProductImage(imageUrl)
                     : Container(
                         color: Colors.grey[100],
                         child: Icon(
@@ -2082,10 +2423,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                   Expanded(
                     child: Text(
                       'Delivery address will be updated soon',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.amber[900],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.amber[900]),
                     ),
                   ),
                 ],
@@ -2349,34 +2687,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
             '#$trackingNumber',
             showCopy: true,
           ),
-
-          // const SizedBox(height: 12),
-
-          // Order Status
-          // _buildDetailRowWithIcon(
-          //   Icons.info_outline,
-          //   'Status',
-          //   orderStatus,
-          //   valueColor: _getStatusColor(orderStatus),
-          // ),
-
-          // const SizedBox(height: 12),
-
-          // // Order Date & Time
-          // _buildDetailRowWithIcon(
-          //   Icons.calendar_today_outlined,
-          //   'Order Date',
-          //   orderDate,
-          // ),
-
-          // if (orderTime.isNotEmpty) ...[
-          //   const SizedBox(height: 12),
-          //   _buildDetailRowWithIcon(
-          //     Icons.access_time_outlined,
-          //     'Order Time',
-          //     orderTime,
-          //   ),
-          // ],
           const SizedBox(height: 12),
 
           // Total Items
@@ -2475,7 +2785,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
       ],
     );
   }
-
 
   Widget _buildSimpleTimeline() {
     return Container(

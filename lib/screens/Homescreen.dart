@@ -2613,7 +2613,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '₹.${product.salePrice}',
+                              '₹${product.salePrice}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -2622,7 +2622,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                             if (product.originalPrice > product.salePrice)
                               Text(
-                                '₹.${product.originalPrice}',
+                                '₹${product.originalPrice}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,

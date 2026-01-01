@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
+import 'package:jan_aushadi/models/coupon_model.dart';
+import 'package:jan_aushadi/screens/coupons_screen.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -18,6 +20,8 @@ class PaymentOptionsScreen extends StatefulWidget {
   final Function(String) onPaymentSelected;
   final Map? cartItems;
   final List? products;
+  final Coupon? appliedCoupon;
+  final double couponDiscount;
 
   const PaymentOptionsScreen({
     super.key,
@@ -25,6 +29,8 @@ class PaymentOptionsScreen extends StatefulWidget {
     required this.onPaymentSelected,
     this.cartItems,
     this.products,
+    this.appliedCoupon,
+    this.couponDiscount = 0.0,
   });
 
   @override
@@ -47,14 +53,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   double _couponDiscount = 0.0;
   String? _appliedCoupon;
   bool _isCouponApplying = false;
-
-  // Mock coupon codes - replace with API call in production
-  final Map<String, double> _validCoupons = {
-    'SAVE10': 10.0,
-    'SAVE20': 20.0,
-    'FLAT50': 50.0,
-    'WELCOME': 15.0,
-  };
 
   double get _totalMrpPrice {
     try {
@@ -105,6 +103,18 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
 
   Future<void> _loadCouponData() async {
     try {
+      // First check if coupon was passed from cart screen
+      if (widget.appliedCoupon != null && widget.couponDiscount > 0) {
+        setState(() {
+          _appliedCoupon = widget.appliedCoupon!.code;
+          _couponDiscount = widget.couponDiscount;
+          _couponController.text = widget.appliedCoupon!.code;
+        });
+        print('✅ Loaded coupon from cart: $_appliedCoupon - ₹$_couponDiscount');
+        return;
+      }
+
+      // Otherwise load from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       final savedCoupon = prefs.getString('applied_coupon_code');
       final savedDiscount = prefs.getDouble('applied_coupon_discount') ?? 0.0;
@@ -149,7 +159,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   }
 
   @override
-  @override
   void dispose() {
     _razorpay.clear();
     _upiIdController.dispose();
@@ -169,72 +178,6 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
     } catch (e) {
       print('❌ Error formatting currency: $e');
       return '₹0.00';
-    }
-  }
-
-  Future<void> _applyCoupon() async {
-    final couponCode = _couponController.text.trim().toUpperCase();
-
-    if (couponCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a coupon code'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isCouponApplying = true);
-
-    // Simulate API call delay
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    if (_validCoupons.containsKey(couponCode)) {
-      setState(() {
-        _appliedCoupon = couponCode;
-        _couponDiscount = _validCoupons[couponCode]!;
-        _isCouponApplying = false;
-      });
-
-      // Save coupon to SharedPreferences
-      await _saveCouponData();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Coupon applied! Discount ${_formatCurrency(_couponDiscount)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-    } else {
-      setState(() => _isCouponApplying = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid coupon code'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
 
@@ -1131,102 +1074,54 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                       ),
                       const SizedBox(height: 12),
                       if (_appliedCoupon == null) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _couponController,
-                                decoration: InputDecoration(
-                                  hintText: 'Enter coupon code',
-                                  hintStyle: TextStyle(color: Colors.grey[400]),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey[300]!,
-                                    ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final result = await Navigator.push<Coupon>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CouponsScreen(
+                                    cartTotal: widget.totalAmount,
+                                    onCouponSelected: (coupon) {
+                                      Navigator.pop(context, coupon);
+                                    },
                                   ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey[300]!,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFF1976D2),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 12,
-                                  ),
-                                  suffixIcon: _isCouponApplying
-                                      ? Padding(
-                                          padding: const EdgeInsets.all(12),
-                                          child: SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    Colors.grey[400]!,
-                                                  ),
-                                            ),
-                                          ),
-                                        )
-                                      : null,
                                 ),
-                                enabled: !_isCouponApplying,
+                              );
+
+                              if (result != null) {
+                                setState(() {
+                                  _appliedCoupon = result.code;
+                                  _couponDiscount =
+                                      double.tryParse(result.amount) ?? 0.0;
+                                  _couponController.text = result.code;
+                                });
+                                await _saveCouponData();
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Coupon applied! Discount: ₹${_couponDiscount.toStringAsFixed(2)}',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            // icon: const Icon(Icons.add),
+                            label: const Text('Apply Coupon'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1976D2),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: _isCouponApplying
-                                  ? null
-                                  : _applyCoupon,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1976D2),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                disabledBackgroundColor: Colors.grey[300],
-                              ),
-                              child: _isCouponApplying
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Apply',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Try: SAVE10, SAVE20, FLAT50, WELCOME',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[500],
-                            fontStyle: FontStyle.italic,
                           ),
                         ),
                       ] else ...[
@@ -1289,13 +1184,18 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                child: const Text(
-                  'Choose Payment Method',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Choose Payment Method',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               _buildPaymentOption(
