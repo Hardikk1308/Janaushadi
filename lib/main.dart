@@ -11,6 +11,7 @@ import 'package:jan_aushadi/screens/MainApp.dart';
 import 'package:jan_aushadi/screens/all_products_screen.dart';
 import 'package:jan_aushadi/screens/search_screen.dart';
 import 'package:jan_aushadi/screens/notification_test_screen.dart';
+import 'package:jan_aushadi/screens/cart_screen.dart';
 import 'package:jan_aushadi/services/cart_service.dart';
 import 'package:jan_aushadi/widgets/in_app_notification_overlay.dart';
 
@@ -44,6 +45,24 @@ void main() async {
 
   // 🚀 Initialize FCM AFTER app start
   FCMService().initializeFCM();
+}
+
+// Wrapper for CartScreen to handle route arguments
+class CartScreenWrapper extends StatelessWidget {
+  final Map<int, int> cartItems;
+
+  const CartScreenWrapper({
+    super.key,
+    required this.cartItems,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CartScreen(
+      cartItems: cartItems,
+      products: const [],
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -178,6 +197,26 @@ class MyApp extends StatelessWidget {
         '/all_products': (context) => const AllProductsScreen(),
         '/search': (context) => const SearchScreen(),
         '/notification_test': (context) => const NotificationTestScreen(),
+        '/cart': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          Map<int, int> cartItems = {};
+          
+          if (args is Map<int, int>) {
+            cartItems = args;
+          } else if (args is Map) {
+            // Handle case where keys might be strings
+            cartItems = args.map((key, value) {
+              final intKey = key is int ? key : int.tryParse(key.toString()) ?? 0;
+              final intValue = value is int ? value : int.tryParse(value.toString()) ?? 0;
+              return MapEntry(intKey, intValue);
+            }).cast<int, int>();
+          }
+          
+          return CartScreen(
+            cartItems: cartItems,
+            products: const [],
+          );
+        },
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(

@@ -294,6 +294,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _offersFuture = _fetchOffers();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Reload cart when app comes back to foreground
+      print('🔄 App resumed, reloading cart...');
+      _loadCartFromStorage();
+    }
+  }
+
   Future<void> _loadSelectedAddress() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1193,6 +1202,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // Reload cart from storage every time build is called
+    // This ensures cart is updated when returning from other screens
+    _loadCartFromStorage();
+    
     final totalItems = _cartItems.values.fold<int>(0, (sum, qty) => sum + qty);
 
     return Scaffold(
@@ -1965,7 +1978,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         style: TextStyle(fontSize: 14, color: Colors.black),
                       ),
                       const Text(
-                        '9098044880',
+                        '9244034997',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1976,7 +1989,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 GestureDetector(
                   onTap: () {
-                    _makePhoneCall('9098044880');
+                    _makePhoneCall('9244034997');
                   },
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -3639,3 +3652,4 @@ class OfferCategory {
     );
   }
 }
+

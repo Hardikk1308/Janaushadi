@@ -1091,10 +1091,20 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
                               );
 
                               if (result != null) {
+                                // Calculate discount based on coupon type
+                                double discount = 0.0;
+                                if (result.discountType.toLowerCase().contains('percent')) {
+                                  // For percentage discount, calculate based on cart total
+                                  final percentValue = double.tryParse(result.amount) ?? 0.0;
+                                  discount = (_totalSalePrice * percentValue) / 100;
+                                } else {
+                                  // For flat discount, use the amount directly
+                                  discount = double.tryParse(result.amount) ?? 0.0;
+                                }
+
                                 setState(() {
                                   _appliedCoupon = result.code;
-                                  _couponDiscount =
-                                      double.tryParse(result.amount) ?? 0.0;
+                                  _couponDiscount = discount;
                                   _couponController.text = result.code;
                                 });
                                 await _saveCouponData();

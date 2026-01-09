@@ -1166,6 +1166,8 @@ class Order {
   final String customerPhone;
   final String? paymentMethod;
   final String? invoiceUrl;
+  final String? discountType; // 'Flat' or 'Percent'
+  final double? discountPercentage; // For percent discounts
 
   Order({
     required this.orderNumber,
@@ -1181,6 +1183,8 @@ class Order {
     this.customerPhone = '',
     this.paymentMethod,
     this.invoiceUrl,
+    this.discountType,
+    this.discountPercentage,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -1206,7 +1210,22 @@ class Order {
         double.tryParse(json['F4_GTOT']?.toString() ?? '0') ?? 0.0;
     double subtotal =
         double.tryParse(json['F4_STOT']?.toString() ?? '0') ?? 0.0;
-    double discount = double.tryParse(json['F4_DIS']?.toString() ?? '0') ?? 0.0;
+    
+    // Parse discount - check discount type
+    double discount = 0.0;
+    String? discountType = json['M1_DC']?.toString(); // 'Flat' or 'Percent'
+    
+    if (discountType?.toLowerCase() == 'flat') {
+      // For flat discount, use M1_AMT1 as the discount amount
+      discount = double.tryParse(json['M1_AMT1']?.toString() ?? '0') ?? 0.0;
+    } else if (discountType?.toLowerCase() == 'percent') {
+      // For percentage discount, calculate from subtotal
+      double percentValue = double.tryParse(json['M1_AMT1']?.toString() ?? '0') ?? 0.0;
+      discount = (subtotal * percentValue) / 100;
+    } else {
+      // Fallback to F4_DIS
+      discount = double.tryParse(json['F4_DIS']?.toString() ?? '0') ?? 0.0;
+    }
 
     // Parse payment method - check multiple possible fields
     String? paymentMethod =
@@ -1243,6 +1262,10 @@ class Order {
           'Customer',
       paymentMethod: paymentMethod,
       invoiceUrl: json['invoice']?.toString(),
+      discountType: discountType,
+      discountPercentage: discountType?.toLowerCase() == 'percent'
+          ? double.tryParse(json['M1_AMT1']?.toString() ?? '0')
+          : null,
     );
 
     print(
@@ -1552,15 +1575,69 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildPriceRow('Subtotal', widget.order.subtotal),
-                  if (widget.order.discount > 0)
-                    _buildPriceRow(
-                      'Discount',
-                      -widget.order.discount,
-                      isDiscount: true,
+                  const SizedBox(height: 8),
+                  if (widget.order.discount > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green[200]!),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.order.discountType?.toLowerCase() == 'percent'
+                                      ? 'Discount Applied'
+                                      : 'Discount',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                if (widget.order.discountType?.toLowerCase() == 'percent')
+                                  Text(
+                                    '${widget.order.discountPercentage?.toStringAsFixed(1)}% off',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green[600],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '- ₹${widget.order.discount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 8),
+                  ],
                   _buildPriceRow('Delivery', 0.0, isFree: true),
-                  const Divider(),
-                  _buildPriceRow('Total', widget.order.total, isTotal: true),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: Colors.grey[300]!),
+                        bottom: BorderSide(color: Colors.grey[300]!),
+                      ),
+                    ),
+                    child: _buildPriceRow('Total Amount', widget.order.total, isTotal: true),
+                  ),
                 ],
               ),
             ),

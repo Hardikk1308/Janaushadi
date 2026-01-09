@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:jan_aushadi/screens/cart_screen.dart';
 import 'dart:convert';
 import 'package:jan_aushadi/widgets/secure_image_widget.dart';
 import 'package:jan_aushadi/models/Product_model.dart' as product_model;
@@ -529,7 +530,26 @@ class _CategoryProductsContentState extends State<CategoryProductsContent> {
   void initState() {
     super.initState();
     _cartItems = {};
+    _loadCartFromSharedPreferences();
     _productsFuture = _fetchCategoryProducts();
+  }
+
+  Future<void> _loadCartFromSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cartJson = prefs.getString('cart_items');
+      if (cartJson != null && cartJson.isNotEmpty) {
+        final Map<String, dynamic> decoded = jsonDecode(cartJson);
+        setState(() {
+          _cartItems = decoded.map(
+            (key, value) => MapEntry(int.parse(key), value as int),
+          );
+        });
+        print('✅ Cart loaded from SharedPreferences: $_cartItems');
+      }
+    } catch (e) {
+      print('❌ Error loading cart from SharedPreferences: $e');
+    }
   }
 
   @override

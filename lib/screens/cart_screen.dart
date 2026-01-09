@@ -46,6 +46,8 @@ class _CartScreenState extends State<CartScreen> {
   static const String _checkoutAddressKey = 'checkout_selected_address';
   static const String _appliedCouponKey = 'applied_coupon_code';
   static const String _couponDiscountKey = 'applied_coupon_discount';
+  static const String _couponDiscountTypeKey = 'applied_coupon_discount_type';
+  static const String _couponAmountKey = 'applied_coupon_amount';
 
   // Coupon state
   Coupon? _appliedCoupon;
@@ -74,21 +76,23 @@ class _CartScreenState extends State<CartScreen> {
       final prefs = await SharedPreferences.getInstance();
       final couponCode = prefs.getString(_appliedCouponKey);
       final discount = prefs.getDouble(_couponDiscountKey) ?? 0.0;
+      final discountType = prefs.getString(_couponDiscountTypeKey) ?? 'Flat';
+      final couponAmount = prefs.getString(_couponAmountKey) ?? '0';
 
       if (couponCode != null && couponCode.isNotEmpty) {
         setState(() {
           _appliedCoupon = Coupon(
             code: couponCode,
             name: couponCode,
-            discountType: 'Flat',
-            amount: discount.toString(),
+            discountType: discountType,
+            amount: couponAmount,
             minAmount: '0',
             expiryDate: '',
             description: 'Applied Coupon',
           );
           _couponDiscount = discount;
         });
-        print('✅ Loaded coupon from storage: $couponCode - ₹$discount');
+        print('✅ Loaded coupon from storage: $couponCode - Type: $discountType - ₹$discount');
       }
     } catch (e) {
       print('❌ Error loading coupon: $e');
@@ -301,9 +305,20 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _applyCoupon(Coupon coupon) {
+    // Calculate discount based on coupon type
+    double discount = 0.0;
+    if (coupon.discountType.toLowerCase().contains('percent')) {
+      // For percentage discount, calculate based on cart total
+      final percentValue = double.tryParse(coupon.amount) ?? 0.0;
+      discount = (_totalSalePrice * percentValue) / 100;
+    } else {
+      // For flat discount, use the amount directly
+      discount = double.tryParse(coupon.amount) ?? 0.0;
+    }
+
     setState(() {
       _appliedCoupon = coupon;
-      _couponDiscount = double.tryParse(coupon.amount) ?? 0.0;
+      _couponDiscount = discount;
     });
 
     _saveCouponToPreferences(coupon);
@@ -341,7 +356,9 @@ class _CartScreenState extends State<CartScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_appliedCouponKey, coupon.code);
       await prefs.setDouble(_couponDiscountKey, _couponDiscount);
-      print('✅ Coupon saved: ${coupon.code} - ₹$_couponDiscount');
+      await prefs.setString(_couponDiscountTypeKey, coupon.discountType);
+      await prefs.setString(_couponAmountKey, coupon.amount);
+      print('✅ Coupon saved: ${coupon.code} - Type: ${coupon.discountType} - ₹$_couponDiscount');
     } catch (e) {
       print('❌ Error saving coupon: $e');
     }
@@ -352,6 +369,8 @@ class _CartScreenState extends State<CartScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_appliedCouponKey);
       await prefs.remove(_couponDiscountKey);
+      await prefs.remove(_couponDiscountTypeKey);
+      await prefs.remove(_couponAmountKey);
       print('✅ Coupon cleared from preferences');
     } catch (e) {
       print('❌ Error clearing coupon: $e');
