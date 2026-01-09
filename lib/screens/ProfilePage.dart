@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:jan_aushadi/services/order_service.dart';
 import 'package:jan_aushadi/services/auth_service.dart';
 import 'package:jan_aushadi/screens/manage_addresses_screen.dart';
-import 'package:jan_aushadi/screens/OrdersPage.dart';
 import 'package:jan_aushadi/screens/MainApp.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';

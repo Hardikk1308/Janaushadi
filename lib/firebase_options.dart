@@ -43,21 +43,19 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDEaO7wnCofjmF8z-ts7t_RgO7kB8nQxQE',
-    appId: '1:405088781146:android:8f4cc511b8b0e0b0b0b0b0',
-    messagingSenderId: '405088781146',
-    projectId: 'jan-aushadi-8f4cc',
-    databaseURL: 'https://jan-aushadi-8f4cc.firebaseio.com',
-    storageBucket: 'jan-aushadi-8f4cc.appspot.com',
+    apiKey: 'AIzaSyCtp9On7UXFFuoxcr9-CQcgj0xgDeWqIfk',
+    appId: '1:1071225942690:android:95e92ff077c8229683ddfb',
+    messagingSenderId: '1071225942690',
+    projectId: 'onlineaushadhi-b7fdd',
+    storageBucket: 'onlineaushadhi-b7fdd.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDEaO7wnCofjmF8z-ts7t_RgO7kB8nQxQE',
-    appId: '1:405088781146:ios:8f4cc511b8b0e0b0b0b0b0',
-    messagingSenderId: '405088781146',
-    projectId: 'jan-aushadi-8f4cc',
-    databaseURL: 'https://jan-aushadi-8f4cc.firebaseio.com',
-    storageBucket: 'jan-aushadi-8f4cc.appspot.com',
+    apiKey: 'AIzaSyBnJIHUDV-mhuisBLdFpJgo8MfotS5vblc',
+    appId: '1:1071225942690:ios:db524d18cb583aba83ddfb',
+    messagingSenderId: '1071225942690',
+    projectId: 'onlineaushadhi-b7fdd',
+    storageBucket: 'onlineaushadhi-b7fdd.firebasestorage.app',
     iosBundleId: 'com.example.janAushadi',
   );
 

@@ -1535,7 +1535,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: IgnorePointer(
                   child: TextField(
                     decoration: InputDecoration(
-                      hintText: 'Search medicines, health...',
+                      hintText: 'Search medicines',
                       hintStyle: TextStyle(color: Colors.grey[400]),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -1547,17 +1547,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1976D2),
-                  borderRadius: BorderRadius.only(
-                    topRight: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-                child: const Icon(Icons.tune, color: Colors.white),
-              ),
+              // Container(
+              //   padding: const EdgeInsets.all(12),
+              //   decoration: const BoxDecoration(
+              //     color: Color(0xFF1976D2),
+              //     borderRadius: BorderRadius.only(
+              //       topRight: Radius.circular(12),
+              //       bottomRight: Radius.circular(12),
+              //     ),
+              //   ),
+              //   // child: const Icon(Icons.tune, color: Colors.white),
+              // ),
             ],
           ),
         ),

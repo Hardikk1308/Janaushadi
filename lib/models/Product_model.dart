@@ -57,14 +57,12 @@ class Product {
     
     if (json['image'] is Map && (json['image'] as Map).isNotEmpty) {
       final imageMap = json['image'] as Map<String, dynamic>;
-      // Get all unique image values from the map (remove duplicates)
-      final uniqueImages = <String>{};
+      // Get all image values from the map in order, preserving all images
       for (var value in imageMap.values) {
         if (value != null && value.toString().isNotEmpty) {
-          uniqueImages.add(value.toString());
+          allImages.add(value.toString());
         }
       }
-      allImages = uniqueImages.toList();
       imageFilename = allImages.isNotEmpty ? allImages.first : '';
     } else if (json['product_image'] != null) {
       imageFilename = json['product_image'].toString();

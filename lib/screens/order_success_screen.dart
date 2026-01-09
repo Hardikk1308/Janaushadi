@@ -294,7 +294,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                         // Clear navigation stack and go to home, then switch to Orders tab
                         Navigator.pushNamedAndRemoveUntil(
                           context,
-                          '/order/${widget.orderId}',
+                          '/order',
                           (route) => false,
                         );
                         // Switch to Orders tab after clearing stack

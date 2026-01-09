@@ -498,67 +498,33 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     }
   }
 
-  void _contactSupport() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.headset_mic, color: AppConstants.primaryColor),
-            const SizedBox(width: 8),
-            const Text('Contact Support'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('How can we help you with your order?'),
-            const SizedBox(height: 16),
-            _buildSupportOption('Track my order', Icons.location_on),
-            _buildSupportOption('Cancel my order', Icons.cancel),
-            _buildSupportOption('Payment issues', Icons.payment),
-            _buildSupportOption('Product questions', Icons.help),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSupportOption(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: () {
-          Navigator.pop(context);
+  void _contactSupport() async {
+    const contactUrl = 'https://www.onlineaushadhi.in/contact_m';
+    try {
+      final Uri uri = Uri.parse(contactUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Support request for: $title')),
+            const SnackBar(
+              content: Text('Could not open contact page'),
+              backgroundColor: Colors.red,
+            ),
           );
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
+        }
+      }
+    } catch (e) {
+      print('❌ Error opening contact support: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
           ),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: AppConstants.primaryColor),
-              const SizedBox(width: 12),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-              const Spacer(),
-              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
-            ],
-          ),
-        ),
-      ),
-    );
+        );
+      }
+    }
   }
 
   void _cancelOrder() {

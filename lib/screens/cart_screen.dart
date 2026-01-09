@@ -489,52 +489,85 @@ class _CartScreenState extends State<CartScreen> {
         throw Exception('User not logged in');
       }
 
-      // IMPORTANT: Call select_delivery_address API first to register the address selection
-      if (_selectedAddressObject != null &&
-          _selectedAddressObject!.id.isNotEmpty) {
-        print('📍 Cart: Calling select_delivery_address API...');
-        try {
-          final selectAddressResponse = await dio.post(
-            'https://www.onlineaushadhi.in/myadmin/UserApis/select_delivery_address',
-            data: {'M1_CODE': m1Code, 'M1_ADD_ID': _selectedAddressObject!.id},
-            options: Options(
-              contentType: Headers.formUrlEncodedContentType,
-              headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Jan-Aushadhi-App/1.0',
-              },
-              sendTimeout: const Duration(seconds: 30),
-              receiveTimeout: const Duration(seconds: 30),
-            ),
-          );
-
-          print(
-            '📍 Cart: Select Address API Response: ${selectAddressResponse.statusCode}',
-          );
-          print(
-            '📍 Cart: Select Address API Data: ${selectAddressResponse.data}',
-          );
-
-          if (selectAddressResponse.statusCode != 200) {
-            print(
-              '⚠️ Cart: Failed to select address, but continuing with order...',
-            );
-          }
-        } catch (e) {
-          print('⚠️ Cart: Error calling select_delivery_address: $e');
-          print('   Continuing with order placement...');
-        }
-      } else {
-        print('⚠️ Cart: No address object available to select');
+      // CRITICAL: Validate that an address is selected
+      if (_selectedAddressObject == null || _selectedAddressObject!.id.isEmpty) {
+        throw Exception('No delivery address selected. Please select an address before placing order.');
       }
+
+      print('📍 Cart: Selected address ID: ${_selectedAddressObject!.id}');
+      print('📍 Cart: Selected address: ${_selectedAddressObject!.fullAddress}');
+
+      // IMPORTANT: Call select_delivery_address API first to register the address selection
+      print('📍 Cart: Calling select_delivery_address API...');
+      print('📍 Cart: Sending M1_CODE: $m1Code, M1_ADD_ID: ${_selectedAddressObject!.id}');
+      try {
+        final selectAddressResponse = await dio.post(
+          'https://www.onlineaushadhi.in/myadmin/UserApis/select_delivery_address',
+          data: {'M1_CODE': m1Code, 'M1_ADD_ID': _selectedAddressObject!.id},
+          options: Options(
+            contentType: Headers.formUrlEncodedContentType,
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'Jan-Aushadhi-App/1.0',
+            },
+            sendTimeout: const Duration(seconds: 30),
+            receiveTimeout: const Duration(seconds: 30),
+          ),
+        );
+
+        print(
+          '📍 Cart: Select Address API Response: ${selectAddressResponse.statusCode}',
+        );
+        print(
+          '📍 Cart: Select Address API Data: ${selectAddressResponse.data}',
+        );
+
+        if (selectAddressResponse.statusCode == 200) {
+          var responseData = selectAddressResponse.data;
+          if (responseData is String) {
+            responseData = jsonDecode(responseData);
+          }
+          
+          if (responseData is Map && responseData['response'] == 'success') {
+            print('✅ Cart: Address successfully selected on backend');
+            print('✅ Cart: Backend confirmed address selection');
+          } else {
+            print(
+              '⚠️ Cart: Backend response not success: ${responseData['response']}',
+            );
+            throw Exception('Backend failed to select address: ${responseData['message']}');
+          }
+        } else {
+          print(
+            '⚠️ Cart: Failed to select address (HTTP ${selectAddressResponse.statusCode})',
+          );
+          throw Exception('Failed to select delivery address on backend');
+        }
+      } catch (e) {
+        print('❌ Cart: Error calling select_delivery_address: $e');
+        throw Exception('Failed to select delivery address: $e');
+      }
+
+      // Add a small delay to ensure backend processes the address selection
+      await Future.delayed(const Duration(milliseconds: 500));
 
       // Prepare order data
       final orderData = {
+        'M1_CODE': m1Code, // Add M1_CODE as well
         'F4_PARTY': m1Code,
         'F4_BT': 'Placed',
-        'M1_ADD_ID':
-            _selectedAddressObject?.id ??
-            _selectedAddress, // Send address ID (matching API expectation)
+        'M1_ADD_ID': _selectedAddressObject!.id.toString(), // Primary address ID parameter
+        'address_id': _selectedAddressObject!.id.toString(), // Alternative parameter name
+        'F4_M1_ADD_ID': _selectedAddressObject!.id.toString(), // Another alternative
+        // Also send address details directly to ensure backend uses correct address
+        'F4_ADD1': _selectedAddressObject!.houseNumber ?? '',
+        'F4_ADD2': _selectedAddressObject!.city ?? '',
+        'F4_ADD3': _selectedAddressObject!.state ?? '',
+        'F4_ADD4': _selectedAddressObject!.pincode ?? '',
+        'F4_ADD5': _selectedAddressObject!.latitude ?? '',
+        'F4_ADD6': _selectedAddressObject!.longitude ?? '',
+        'F4_ADD7': _selectedAddressObject!.street ?? '',
+        'F4_ADD8': _selectedAddressObject!.landmark ?? '',
         'payment_method': paymentMethod,
         'payment_status': paymentMethod.toUpperCase() == 'COD'
             ? 'pending'
@@ -606,6 +639,16 @@ class _CartScreenState extends State<CartScreen> {
       print('🚀 ========================================');
       print('🚀 CART: PLACING ORDER - SINGLE API CALL');
       print('🚀 ========================================');
+      print('📍 ADDRESS DETAILS BEING SENT:');
+      print('   M1_ADD_ID: ${_selectedAddressObject!.id}');
+      print('   F4_ADD1 (House): ${_selectedAddressObject!.houseNumber}');
+      print('   F4_ADD2 (City): ${_selectedAddressObject!.city}');
+      print('   F4_ADD3 (State): ${_selectedAddressObject!.state}');
+      print('   F4_ADD4 (Pincode): ${_selectedAddressObject!.pincode}');
+      print('   F4_ADD5 (Lat): ${_selectedAddressObject!.latitude}');
+      print('   F4_ADD6 (Long): ${_selectedAddressObject!.longitude}');
+      print('   F4_ADD7 (Street): ${_selectedAddressObject!.street}');
+      print('   F4_ADD8 (Landmark): ${_selectedAddressObject!.landmark}');
       print('📤 Cart: Order data:');
       orderData.forEach((key, value) {
         print('   $key = $value');
@@ -803,126 +846,344 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalPrice = _calculateTotal();
+    _calculateTotal();
     final cartItemsList = _cartItems.entries.toList();
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context, _cartItems);
+        Navigator.pop(context, _cartItems);  
         return false;
       },
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context, _cartItems),
+      child: SafeArea(
+        child: Scaffold(
+          // resizeToAvoidBottomInset: true,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () => Navigator.pop(context, _cartItems),
+            ),
+            title: const Text(
+              'Shopping Cart',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
-          title: const Text(
-            'Shopping Cart',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-          ),
-        ),
-        body: _cartItems.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          body: _cartItems.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.shopping_cart_outlined,
+                        size: 64,
+                        color: Colors.grey[300],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Your cart is empty',
+                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
                   children: [
-                    Icon(
-                      Icons.shopping_cart_outlined,
-                      size: 64,
-                      color: Colors.grey[300],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Your cart is empty',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              )
-            : Column(
-                children: [
-                  // Cart Items List with Address and Bill Details at the end
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount:
-                          cartItemsList.length +
-                          1, // +1 for address and bill details
-                      itemBuilder: (context, index) {
-                        // Show products first
-                        if (index < cartItemsList.length) {
-                          final entry = cartItemsList[index];
-                          final productId = entry.key;
-                          final quantity = entry.value;
+                    // Cart Items List with Address and Bill Details at the end
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount:
+                            cartItemsList.length +
+                            1, // +1 for address and bill details
+                        itemBuilder: (context, index) {
+                          // Show products first
+                          if (index < cartItemsList.length) {
+                            final entry = cartItemsList[index];
+                            final productId = entry.key;
+                            final quantity = entry.value;
 
-                          // Try to find the product
-                          Product? product;
-                          try {
-                            product = widget.products.firstWhere((p) {
-                              try {
-                                return int.parse(p.id) == productId;
-                              } catch (e) {
-                                return false;
-                              }
-                            });
-                          } catch (e) {
-                            print('⚠️ Product not found for ID: $productId');
-                            product = null;
-                          }
+                            // Try to find the product
+                            Product? product;
+                            try {
+                              product = widget.products.firstWhere((p) {
+                                try {
+                                  return int.parse(p.id) == productId;
+                                } catch (e) {
+                                  return false;
+                                }
+                              });
+                            } catch (e) {
+                              print('⚠️ Product not found for ID: $productId');
+                              product = null;
+                            }
 
-                          // If product not found, show a placeholder
-                          if (product == null) {
+                            // If product not found, show a placeholder
+                            if (product == null) {
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.shopping_bag,
+                                          color: Colors.grey[400],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Product #$productId',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Qty: $quantity',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Product details loading...',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.orange[700],
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final itemTotal = product.salePrice * quantity;
+
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
                               child: Padding(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(10),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        Icons.shopping_bag,
-                                        color: Colors.grey[400],
-                                      ),
+                                    // Product Image
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: product.imageUrl.isNotEmpty
+                                          ? SecureImageWidget(
+                                              imageUrls: [
+                                                'https://webdevelopercg.com/janaushadhi/myadmin/uploads/product/${product.imageUrl}',
+                                                'https://webdevelopercg.com/janaushadhi/uploads/product/${product.imageUrl}',
+                                                'https://webdevelopercg.com/janaushadhi/uploads/product_images/${product.imageUrl}',
+                                                'https://webdevelopercg.com/janaushadhi/public/uploads/product/${product.imageUrl}',
+                                                'https://webdevelopercg.com/janaushadhi/assets/product/${product.imageUrl}',
+                                              ],
+                                              width: 80,
+                                              height: 80,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : Container(
+                                              width: 80,
+                                              height: 80,
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey[200],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: const Icon(
+                                                Icons.shopping_bag,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
                                     ),
                                     const SizedBox(width: 12),
+                                    // Product Details
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            'Product #$productId',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  product.name,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                onPressed: () async {
+                                                  setState(() {
+                                                    _cartItems.remove(
+                                                      productId,
+                                                    );
+                                                  });
+
+                                                  // Save cart changes immediately
+                                                  await _saveCartToSharedPreferences();
+
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          '${product?.name} removed from cart',
+                                                        ),
+                                                        duration:
+                                                            const Duration(
+                                                              seconds: 2,
+                                                            ),
+                                                        backgroundColor:
+                                                            Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                  color: Colors.red,
+                                                  size: 20,
+                                                ),
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(height: 4),
+                                          // const SizedBox(height: 4),
                                           Text(
-                                            'Qty: $quantity',
+                                            product.brand,
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: Colors.grey[600],
                                             ),
                                           ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            'Product details loading...',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.orange[700],
-                                              fontStyle: FontStyle.italic,
-                                            ),
+                                          // const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                '₹$itemTotal',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF1976D2),
+                                                ),
+                                              ),
+                                              // Quantity Controls
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(
+                                                    color: const Color(
+                                                      0xFF1976D2,
+                                                    ),
+                                                    width: 1.5,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    GestureDetector(
+                                                      onTap: () {
+                                                        _updateQuantity(
+                                                          productId,
+                                                          quantity - 1,
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 6,
+                                                            ),
+                                                        child: const Icon(
+                                                          Icons.remove,
+                                                          size: 14,
+                                                          color: Color(
+                                                            0xFF1976D2,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                          ),
+                                                      child: Text(
+                                                        '$quantity',
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Color(
+                                                            0xFF1976D2,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    GestureDetector(
+                                                      onTap: () {
+                                                        _updateQuantity(
+                                                          productId,
+                                                          quantity + 1,
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 6,
+                                                            ),
+                                                        child: const Icon(
+                                                          Icons.add,
+                                                          size: 14,
+                                                          color: Color(
+                                                            0xFF1976D2,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -931,484 +1192,287 @@ class _CartScreenState extends State<CartScreen> {
                                 ),
                               ),
                             );
-                          }
-
-                          final itemTotal = product.salePrice * quantity;
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Product Image
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: product.imageUrl.isNotEmpty
-                                        ? SecureImageWidget(
-                                            imageUrls: [
-                                              'https://webdevelopercg.com/janaushadhi/myadmin/uploads/product/${product.imageUrl}',
-                                              'https://webdevelopercg.com/janaushadhi/uploads/product/${product.imageUrl}',
-                                              'https://webdevelopercg.com/janaushadhi/uploads/product_images/${product.imageUrl}',
-                                              'https://webdevelopercg.com/janaushadhi/public/uploads/product/${product.imageUrl}',
-                                              'https://webdevelopercg.com/janaushadhi/assets/product/${product.imageUrl}',
-                                            ],
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                          )
-                                        : Container(
-                                            width: 80,
-                                            height: 80,
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey[200],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: const Icon(
-                                              Icons.shopping_bag,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  // Product Details
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                product.name,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                            IconButton(
-                                              onPressed: () async {
-                                                setState(() {
-                                                  _cartItems.remove(productId);
-                                                });
-
-                                                // Save cart changes immediately
-                                                await _saveCartToSharedPreferences();
-
-                                                if (mounted) {
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        '${product?.name} removed from cart',
-                                                      ),
-                                                      duration: const Duration(
-                                                        seconds: 2,
-                                                      ),
-                                                      backgroundColor:
-                                                          Colors.red,
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                              icon: const Icon(
-                                                Icons.delete_outline,
-                                                color: Colors.red,
-                                                size: 20,
-                                              ),
-                                              padding: EdgeInsets.zero,
-                                              constraints:
-                                                  const BoxConstraints(),
-                                            ),
-                                          ],
-                                        ),
-                                        // const SizedBox(height: 4),
-                                        Text(
-                                          product.brand,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                        // const SizedBox(height: 4),
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '₹$itemTotal',
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF1976D2),
-                                              ),
-                                            ),
-                                            // Quantity Controls
-                                            Container(
-                                              decoration: BoxDecoration(
-                                                border: Border.all(
-                                                  color: const Color(
-                                                    0xFF1976D2,
-                                                  ),
-                                                  width: 1.5,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  GestureDetector(
-                                                    onTap: () {
-                                                      _updateQuantity(
-                                                        productId,
-                                                        quantity - 1,
-                                                      );
-                                                    },
-                                                    child: Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 8,
-                                                            vertical: 6,
-                                                          ),
-                                                      child: const Icon(
-                                                        Icons.remove,
-                                                        size: 14,
-                                                        color: Color(
-                                                          0xFF1976D2,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 8,
-                                                        ),
-                                                    child: Text(
-                                                      '$quantity',
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Color(
-                                                          0xFF1976D2,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  GestureDetector(
-                                                    onTap: () {
-                                                      _updateQuantity(
-                                                        productId,
-                                                        quantity + 1,
-                                                      );
-                                                    },
-                                                    child: Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 8,
-                                                            vertical: 6,
-                                                          ),
-                                                      child: const Icon(
-                                                        Icons.add,
-                                                        size: 14,
-                                                        color: Color(
-                                                          0xFF1976D2,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        } else {
-                          // Show address and bill details at the end
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 8),
-                              // Address Display
-                              if (_selectedAddress.isEmpty)
-                                GestureDetector(
-                                  onTap: _showAddressForm,
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: const Color(0xFF1976D2),
-                                        width: 2,
-                                        style: BorderStyle.solid,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on_outlined,
-                                          color: Color(0xFF1976D2),
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        const Text(
-                                          'Add Delivery Address',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Color(0xFF1976D2),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                              else
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Delivery Address',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
+                          } else {
+                            // Show address and bill details at the end
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 8),
+                                // Address Display
+                                if (_selectedAddress.isEmpty)
+                                  GestureDetector(
+                                    onTap: _showAddressForm,
+                                    child: Container(
                                       width: double.infinity,
-                                      padding: const EdgeInsets.all(12),
+                                      padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
-                                        color: Colors.white,
                                         border: Border.all(
-                                          color: Colors.green,
+                                          color: const Color(0xFF1976D2),
                                           width: 2,
+                                          style: BorderStyle.solid,
                                         ),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                      child: Row(
                                         children: [
-                                          Text(
-                                            _selectedAddress,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                          const Icon(
+                                            Icons.location_on_outlined,
+                                            color: Color(0xFF1976D2),
+                                            size: 20,
                                           ),
-                                          const SizedBox(height: 8),
-                                          GestureDetector(
-                                            onTap: _showAddressForm,
-                                            child: const Text(
-                                              'Change Address',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Color(0xFF1976D2),
-                                                fontWeight: FontWeight.w600,
-                                                decoration:
-                                                    TextDecoration.underline,
-                                              ),
+                                          const SizedBox(width: 12),
+                                          const Text(
+                                            'Add Delivery Address',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Color(0xFF1976D2),
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                  ],
-                                ),
-                              const SizedBox(height: 16),
-
-                              // Bill Details
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey[200]!),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Bill Details',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _buildBillRow(
-                                      'Total MRP Price',
-                                      '₹${_totalMrpPrice.toStringAsFixed(2)}',
-                                    ),
-                                    if (_savings > 0)
-                                      _buildBillRow(
-                                        'Discount',
-                                        '-₹${_savings.toStringAsFixed(2)}',
-                                      ),
-                                    _buildBillRow(
-                                      'Total Sale Price',
-                                      '₹${_totalSalePrice.toStringAsFixed(2)}',
-                                    ),
-                                    if (_couponDiscount > 0) ...[
-                                      const SizedBox(height: 8),
-                                      _buildBillRow(
-                                        'Coupon Discount',
-                                        '-₹${_couponDiscount.toStringAsFixed(2)}',
-                                      ),
-                                    ],
-                                    const Divider(height: 24, thickness: 1),
-                                    _buildBillRow(
-                                      'Total',
-                                      '₹${_total.toStringAsFixed(2)}',
-                                      isTotal: true,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (_savings > 0)
-                                      Text(
-                                        '🎉 You saved ₹${_savings.toStringAsFixed(2)}!',
+                                  )
+                                else
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Delivery Address',
                                         style: TextStyle(
-                                          color: Colors.green[700],
-                                          fontWeight: FontWeight.w500,
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                    if (_appliedCoupon != null) ...[
                                       const SizedBox(height: 8),
                                       Container(
-                                        padding: const EdgeInsets.all(8),
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Colors.green[50],
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
+                                          color: Colors.white,
                                           border: Border.all(
-                                            color: Colors.green[200]!,
+                                            color: Colors.green,
+                                            width: 2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
                                           ),
                                         ),
-                                        child: Row(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Icon(
-                                              Icons.local_offer,
-                                              color: Colors.green[700],
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                'Coupon ${_appliedCoupon!.code} applied',
-                                                style: TextStyle(
-                                                  color: Colors.green[700],
-                                                  fontWeight: FontWeight.w500,
-                                                  fontSize: 12,
-                                                ),
+                                            Text(
+                                              _selectedAddress,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
+                                            const SizedBox(height: 8),
                                             GestureDetector(
-                                              onTap: _removeCoupon,
-                                              child: Icon(
-                                                Icons.close,
-                                                color: Colors.green[700],
-                                                size: 16,
+                                              onTap: _showAddressForm,
+                                              child: const Text(
+                                                'Change Address',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF1976D2),
+                                                  fontWeight: FontWeight.w600,
+                                                  decoration:
+                                                      TextDecoration.underline,
+                                                ),
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
                                     ],
-                                  ],
+                                  ),
+                                const SizedBox(height: 16),
+
+                                // Bill Details
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.grey[200]!,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Bill Details',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildBillRow(
+                                        'Total MRP Price',
+                                        '₹${_totalMrpPrice.toStringAsFixed(2)}',
+                                      ),
+                                      if (_savings > 0)
+                                        _buildBillRow(
+                                          'Discount',
+                                          '-₹${_savings.toStringAsFixed(2)}',
+                                        ),
+                                      _buildBillRow(
+                                        'Total Sale Price',
+                                        '₹${_totalSalePrice.toStringAsFixed(2)}',
+                                      ),
+                                      if (_couponDiscount > 0) ...[
+                                        const SizedBox(height: 8),
+                                        _buildBillRow(
+                                          'Coupon Discount',
+                                          '-₹${_couponDiscount.toStringAsFixed(2)}',
+                                        ),
+                                      ],
+                                      const Divider(height: 24, thickness: 1),
+                                      _buildBillRow(
+                                        'Total',
+                                        '₹${_total.toStringAsFixed(2)}',
+                                        isTotal: true,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (_savings > 0)
+                                        Text(
+                                          '🎉 You saved ₹${_savings.toStringAsFixed(2)}!',
+                                          style: TextStyle(
+                                            color: Colors.green[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      if (_appliedCoupon != null) ...[
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green[50],
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.green[200]!,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.local_offer,
+                                                color: Colors.green[700],
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'Coupon ${_appliedCoupon!.code} applied',
+                                                  style: TextStyle(
+                                                    color: Colors.green[700],
+                                                    fontWeight: FontWeight.w500,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ),
+                                              GestureDetector(
+                                                onTap: _removeCoupon,
+                                                child: Icon(
+                                                  Icons.close,
+                                                  color: Colors.green[700],
+                                                  size: 16,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    // Sticky Checkout Button at Bottom
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                          top: BorderSide(color: Colors.grey[200]!),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total (${_cartItems.length} items)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 4),
+                              Text(
+                                '₹${_total.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1976D2),
+                                ),
+                              ),
                             ],
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  // Sticky Checkout Button at Bottom
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(top: BorderSide(color: Colors.grey[200]!)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Total (${_cartItems.length} items)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '₹${_total.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1976D2),
-                              ),
-                            ),
-                          ],
-                        ),
-                        ElevatedButton(
-                          onPressed: _isProcessingPayment
-                              ? null
-                              : _navigateToPaymentOptions,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1976D2),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
                           ),
-                          child: _isProcessingPayment
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
+                          ElevatedButton(
+                            onPressed: _isProcessingPayment
+                                ? null
+                                : _navigateToPaymentOptions,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1976D2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: _isProcessingPayment
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Proceed to Checkout',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                )
-                              : const Text(
-                                  'Proceed to Checkout',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }

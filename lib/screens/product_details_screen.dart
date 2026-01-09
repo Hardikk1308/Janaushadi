@@ -272,68 +272,66 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return SafeArea(
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context, _cartItems),
-        ),
-        title: Text(
-          widget.product.name,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context, _cartItems),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.favorite_border, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.share, color: Colors.black),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Product Image
-                _buildProductImage(),
-
-                // Product Basic Info
-                _buildProductBasicInfo(),
-
-                // Product Descriptions
-                _buildProductDescriptions(),
-
-                const SizedBox(height: 100), // Space for bottom bar
-              ],
+          title: Text(
+            widget.product.name,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          // Floating Cart Bar
-          Positioned(
-            left: 15,
-            right: 15,
-            bottom: 15,
-            child: _buildFloatingCartBar(),
-          ),
-        ],
+          //
+        ),
+        body: Stack(
+          children: [
+            SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Product Image
+                  _buildProductImage(),
+
+                  // Product Basic Info
+                  _buildProductBasicInfo(),
+
+                  // Product Descriptions
+                  _buildProductDescriptions(),
+
+                  const SizedBox(height: 100), // Space for bottom bar
+                ],
+              ),
+            ),
+            // Floating Cart Bar
+            Positioned(
+              left: 15,
+              right: 15,
+              bottom: 15,
+              child: _buildFloatingCartBar(),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomBar(),
       ),
-      bottomNavigationBar: _buildBottomBar(),
     );
   }
 
   Widget _buildProductImage() {
-    final hasMultipleImages = widget.product.imageUrls.length > 1;
+    // Use imageUrls if available, otherwise fallback to single imageUrl
+    final imagesToDisplay = widget.product.imageUrls.isNotEmpty
+        ? widget.product.imageUrls
+        : [widget.product.imageUrl];
+
+    final hasMultipleImages = imagesToDisplay.length > 1;
 
     return Container(
       height: 350,
@@ -341,34 +339,23 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       color: Colors.grey[50],
       child: Stack(
         children: [
-          if (hasMultipleImages)
-            // Multiple images - horizontal scroll
-            PageView.builder(
-              itemCount: widget.product.imageUrls.length,
-              itemBuilder: (context, index) {
-                final imageFilename = widget.product.imageUrls[index];
-                return Container(
-                  color: Colors.white,
-                  child: _ImageLoaderWidget(
-                    imageUrlVariants: _generateImageUrlsFromFilename(
-                      imageFilename,
-                    ),
-                    fit: BoxFit.contain,
-                    m1Code: _m1Code,
+          // Always use PageView for consistent UI
+          PageView.builder(
+            itemCount: imagesToDisplay.length,
+            itemBuilder: (context, index) {
+              final imageFilename = imagesToDisplay[index];
+              return Container(
+                color: Colors.white,
+                child: _ImageLoaderWidget(
+                  imageUrlVariants: _generateImageUrlsFromFilename(
+                    imageFilename,
                   ),
-                );
-              },
-            )
-          else
-            // Single image
-            SizedBox(
-              width: double.infinity,
-              child: _ImageLoaderWidget(
-                imageUrlVariants: _generateImageUrls(widget.product),
-                fit: BoxFit.contain,
-                m1Code: _m1Code,
-              ),
-            ),
+                  fit: BoxFit.contain,
+                  m1Code: _m1Code,
+                ),
+              );
+            },
+          ),
           // Discount badge
           if (widget.product.discountPercent > 0)
             Positioned(
@@ -393,7 +380,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
               ),
             ),
-          // Image indicator for multiple images
+          // Image indicator dots - only show for multiple images
           if (hasMultipleImages)
             Positioned(
               bottom: 16,
@@ -402,7 +389,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
-                  widget.product.imageUrls.length,
+                  imagesToDisplay.length,
                   (index) => Container(
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     width: 8,

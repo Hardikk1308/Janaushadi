@@ -4,6 +4,7 @@ import 'package:jan_aushadi/services/auth_service.dart';
 import 'package:jan_aushadi/constants/app_constants.dart';
 import 'package:jan_aushadi/screens/order_tracking_screen.dart';
 import 'package:jan_aushadi/screens/product_details_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 
 class OrdersPage extends StatefulWidget {
@@ -75,6 +76,7 @@ class _OrdersPageState extends State<OrdersPage>
       }
 
       // Fetch all orders at once (API returns all orders)
+      // Note: Not including F4_BT to get all orders without status filter
       print('\n📦 Fetching all orders...');
 
       final response = await dio.post(
@@ -116,8 +118,11 @@ class _OrdersPageState extends State<OrdersPage>
                   .toList();
 
               // Categorize orders by status
+              // "Placed" includes both "placed" and "confirmed" statuses
               placedOrders = allOrders
-                  .where((order) => order.status.toLowerCase() == 'placed')
+                  .where((order) => 
+                      order.status.toLowerCase() == 'placed' ||
+                      order.status.toLowerCase() == 'confirmed')
                   .toList();
 
               deliveredOrders = allOrders
@@ -261,6 +266,54 @@ class _OrdersPageState extends State<OrdersPage>
       _selectedDate = null;
       _currentPage = 1;
     });
+  }
+
+  // Download invoice
+  Future<void> _downloadInvoice(Order order) async {
+    if (order.invoiceUrl == null || order.invoiceUrl!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invoice URL not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Import url_launcher at the top of the file
+      // import 'package:url_launcher/url_launcher.dart';
+      
+      final Uri invoiceUri = Uri.parse(order.invoiceUrl!);
+      
+      if (await canLaunchUrl(invoiceUri)) {
+        await launchUrl(
+          invoiceUri,
+          mode: LaunchMode.externalApplication,
+        );
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Opening invoice...'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        throw 'Could not launch invoice URL';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open invoice: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _trackOrder(Order order) {
@@ -992,8 +1045,35 @@ class _OrdersPageState extends State<OrdersPage>
                     ),
                   ),
                 ),
-                // Cancel button - only show for placed orders
-                if (order.status.toLowerCase() == 'placed') ...[
+                // Download Invoice button - only show for delivered orders
+                if (order.status.toLowerCase() == 'delivered' &&
+                    order.invoiceUrl != null &&
+                    order.invoiceUrl!.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _downloadInvoice(order),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[50],
+                        foregroundColor: Colors.green[700],
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.green[200]!),
+                        ),
+                        elevation: 0,
+                      ),
+                      icon: Icon(Icons.download, size: 18, color: Colors.green[700]),
+                      label: const Text(
+                        'Invoice',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else if (order.status.toLowerCase() == 'placed') ...[
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
@@ -1060,6 +1140,8 @@ class _OrdersPageState extends State<OrdersPage>
     switch (status.toLowerCase()) {
       case 'placed':
         return Colors.blue;
+      case 'confirmed':
+        return Colors.orange;
       case 'delivered':
         return Colors.green;
       case 'cancelled':
@@ -1083,6 +1165,7 @@ class Order {
   final String customerName;
   final String customerPhone;
   final String? paymentMethod;
+  final String? invoiceUrl;
 
   Order({
     required this.orderNumber,
@@ -1097,6 +1180,7 @@ class Order {
     this.customerName = 'Customer',
     this.customerPhone = '',
     this.paymentMethod,
+    this.invoiceUrl,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -1158,6 +1242,7 @@ class Order {
           json['M1_NAME']?.toString() ??
           'Customer',
       paymentMethod: paymentMethod,
+      invoiceUrl: json['invoice']?.toString(),
     );
 
     print(

@@ -1,13 +1,32 @@
 {
   "project_info": {
-    "project_number": "899126369098",
-    "project_id": "janaushadhi-customer",
-    "storage_bucket": "janaushadhi-customer.firebasestorage.app"
+    "project_number": "1071225942690",
+    "project_id": "onlineaushadhi-b7fdd",
+    "storage_bucket": "onlineaushadhi-b7fdd.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:899126369098:android:a8ab1e59beaff6c471ffb3",
+        "mobilesdk_app_id": "1:1071225942690:android:fe58748e7694b9c183ddfb",
+        "android_client_info": {
+          "package_name": "com.logixhunt.jan_aushadi_rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtp9On7UXFFuoxcr9-CQcgj0xgDeWqIfk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1071225942690:android:95e92ff077c8229683ddfb",
         "android_client_info": {
           "package_name": "com.logixhunt.janaushadhi.customer"
         }
@@ -15,7 +34,26 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDTVKwqW17AxGlh3EBQZ9FkzoPMOGEl9SM"
+          "current_key": "AIzaSyCtp9On7UXFFuoxcr9-CQcgj0xgDeWqIfk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1071225942690:android:3b553805142d46bd83ddfb",
+        "android_client_info": {
+          "package_name": "com.logixhunt.janaushadhi_vendor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtp9On7UXFFuoxcr9-CQcgj0xgDeWqIfk"
         }
       ],
       "services": {
